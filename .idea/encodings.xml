@@ -4,6 +4,33 @@
     <file url="file://$APPLICATION_HOME_DIR$/src/main/java" charset="UTF-8" />
     <file url="file://$APPLICATION_HOME_DIR$/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/FoodDelivery/customer-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/infra/api-gateway/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/infra/api-gateway/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/infra/config-server/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/infra/config-server/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/infra/eureka-server/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/infra/eureka-server/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/services/customer-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/services/customer-service/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/services/delivery-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/services/delivery-service/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/services/notification-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/services/notification-service/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/services/order-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/services/order-service/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/services/payment-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/services/payment-service/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/services/restaurant-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/services/restaurant-service/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/shared/common-events/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/shared/common-events/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/shared/common-repo/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/shared/common-repo/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/shared/common-web/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/shared/common-web/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FoodDelivery/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/FoodDelivery/src/main/resources" charset="UTF-8" />
+    <file url="file://$USER_HOME$/src/main/java" charset="UTF-8" />
+    <file url="file://$USER_HOME$/src/main/resources" charset="UTF-8" />
   </component>
 </project>

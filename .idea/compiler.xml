@@ -11,6 +11,7 @@
         <module name="config-server" />
         <module name="payment-service" />
         <module name="restaurant-service" />
+        <module name="customer-service" />
         <module name="api-gateway" />
         <module name="common-web" />
         <module name="order-service" />
@@ -18,17 +19,11 @@
         <module name="notification-service" />
         <module name="common-events" />
       </profile>
-      <profile name="Annotation profile for FoodDelivery" enabled="true">
-        <sourceOutputDir name="../../customer-service/target/generated-sources/annotations" />
-        <sourceTestOutputDir name="../../customer-service/target/generated-test-sources/test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <module name="customer-service" />
-      </profile>
     </annotationProcessing>
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
-      <module name="customer-service" options="-parameters" />
+      <module name="customer-service" options="" />
     </option>
   </component>
 </project>

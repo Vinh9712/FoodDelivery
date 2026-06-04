@@ -3,18 +3,6 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/Food_Delivery.iml" filepath="$PROJECT_DIR$/.idea/Food_Delivery.iml" />
-      <module fileurl="file://$PROJECT_DIR$/FoodDelivery/infra/api-gateway/api-gateway.iml" filepath="$PROJECT_DIR$/FoodDelivery/infra/api-gateway/api-gateway.iml" />
-      <module fileurl="file://$PROJECT_DIR$/FoodDelivery/shared/common-events/common-events.iml" filepath="$PROJECT_DIR$/FoodDelivery/shared/common-events/common-events.iml" />
-      <module fileurl="file://$PROJECT_DIR$/FoodDelivery/shared/common-repo/common-repo.iml" filepath="$PROJECT_DIR$/FoodDelivery/shared/common-repo/common-repo.iml" />
-      <module fileurl="file://$PROJECT_DIR$/FoodDelivery/shared/common-web/common-web.iml" filepath="$PROJECT_DIR$/FoodDelivery/shared/common-web/common-web.iml" />
-      <module fileurl="file://$PROJECT_DIR$/FoodDelivery/infra/config-server/config-server.iml" filepath="$PROJECT_DIR$/FoodDelivery/infra/config-server/config-server.iml" />
-      <module fileurl="file://$PROJECT_DIR$/FoodDelivery/services/customer-service/customer-service.iml" filepath="$PROJECT_DIR$/FoodDelivery/services/customer-service/customer-service.iml" />
-      <module fileurl="file://$PROJECT_DIR$/FoodDelivery/services/delivery-service/delivery-service.iml" filepath="$PROJECT_DIR$/FoodDelivery/services/delivery-service/delivery-service.iml" />
-      <module fileurl="file://$PROJECT_DIR$/FoodDelivery/infra/eureka-server/eureka-server.iml" filepath="$PROJECT_DIR$/FoodDelivery/infra/eureka-server/eureka-server.iml" />
-      <module fileurl="file://$PROJECT_DIR$/FoodDelivery/services/notification-service/notification-service.iml" filepath="$PROJECT_DIR$/FoodDelivery/services/notification-service/notification-service.iml" />
-      <module fileurl="file://$PROJECT_DIR$/FoodDelivery/services/order-service/order-service.iml" filepath="$PROJECT_DIR$/FoodDelivery/services/order-service/order-service.iml" />
-      <module fileurl="file://$PROJECT_DIR$/FoodDelivery/services/payment-service/payment-service.iml" filepath="$PROJECT_DIR$/FoodDelivery/services/payment-service/payment-service.iml" />
-      <module fileurl="file://$PROJECT_DIR$/FoodDelivery/services/restaurant-service/restaurant-service.iml" filepath="$PROJECT_DIR$/FoodDelivery/services/restaurant-service/restaurant-service.iml" />
     </modules>
   </component>
 </project>
