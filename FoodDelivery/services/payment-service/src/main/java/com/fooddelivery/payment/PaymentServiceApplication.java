@@ -1,13 +1,13 @@
-package com.fooddelivery.deliveryservice;
+package com.fooddelivery.payment;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class DeliveryServiceApplication {
+public class PaymentServiceApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(DeliveryServiceApplication.class, args);
+        SpringApplication.run(PaymentServiceApplication.class, args);
     }
 
 }

@@ -1,13 +1,13 @@
-package com.fooddelivery.notificationservice;
+package com.fooddelivery.restaurant;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class NotificationServiceApplication {
+public class RestaurantServiceApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(NotificationServiceApplication.class, args);
+        SpringApplication.run(RestaurantServiceApplication.class, args);
     }
 
 }

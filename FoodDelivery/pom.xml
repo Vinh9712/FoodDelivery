@@ -18,6 +18,20 @@
         <lombook.version>1.18.46</lombook.version>
     </properties>
 
+    <modules>
+        <module>services/notification-service</module>
+        <module>services/customer-service</module>
+        <module>services/delivery-service</module>
+        <module>services/order-service</module>
+        <module>services/payment-service</module>
+        <module>services/restaurant-service</module>
+        <module>shared/common-events</module>
+        <module>shared/common-web</module>
+        <module>shared/common-repo</module>
+        <module>infra/eureka-server</module>
+        <module>infra/config-server</module>
+        <module>infra/api-gateway</module>
+    </modules>
     <dependencyManagement>
         <dependencies>
             <dependency>
