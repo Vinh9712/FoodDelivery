@@ -15,7 +15,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>3.5.14</spring-boot.version>
         <spring-cloud.version>2025.0.0</spring-cloud.version>
-        <lombook.version>1.18.46</lombook.version>
+        <lombok.version>1.18.46</lombok.version>
     </properties>
 
     <modules>
@@ -51,7 +51,7 @@
             <dependency>
                 <groupId>org.projectlombok</groupId>
                 <artifactId>lombok</artifactId>
-                <version>${lombook.version}</version>
+                <version>${lombok.version}</version>
                 <scope>provided</scope>
             </dependency>
 
