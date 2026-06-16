@@ -73,6 +73,13 @@ public class User extends BaseEntity {
         this.passwordHash = newPasswordHash;
     }
 
+    public void updatePhone(String phone) {
+        if (isBlank(phone)) {
+            throw new IllegalArgumentException("phone is required");
+        }
+        this.phone = phone.trim();
+    }
+
     public void markLoggedIn() {
         this.lastLoginAt = Instant.now();
     }

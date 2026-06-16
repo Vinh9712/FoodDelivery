@@ -104,7 +104,10 @@ public class Customer extends BaseEntity {
 
     public void removeAddress(UUID addressId) {
         Address target = findAddress(addressId);
-        addresses.remove(target);
+        target.softDelete();
+        if (target.isDefaultAddress()) {
+            target.unsetDefault();
+        }
     }
 
     public void setDefaultAddress(UUID addressId) {

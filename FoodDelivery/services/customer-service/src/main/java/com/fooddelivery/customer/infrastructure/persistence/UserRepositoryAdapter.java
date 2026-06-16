@@ -2,28 +2,41 @@ package com.fooddelivery.customer.infrastructure.persistence;
 
 import com.fooddelivery.customer.domain.model.User;
 import com.fooddelivery.customer.domain.repository.UserRepository;
+import org.springframework.stereotype.Component;
 
 import java.util.Optional;
+import java.util.UUID;
 
+@Component
 public class UserRepositoryAdapter implements UserRepository {
-    private final UserRepository userRepository;
+    private final UserJPARepository userJPARepository;
 
-    public UserRepositoryAdapter(UserRepository userRepository) {
-        this.userRepository = userRepository;
+    public UserRepositoryAdapter(UserJPARepository userJPARepository) {
+        this.userJPARepository = userJPARepository;
     }
 
     @Override
     public Optional<User> findByEmail(String email) {
-        return userRepository.findByEmail(email);
+        return userJPARepository.findByEmail(email);
     }
+
     @Override
     public boolean existsByEmail(String email) {
-        return userRepository.existsByEmail(email);
+        return userJPARepository.existsByEmail(email);
     }
 
     @Override
     public boolean existsByPhone(String phone) {
-        return userRepository.existsByPhone(phone);
+        return userJPARepository.existsByPhone(phone);
     }
 
+    @Override
+    public User save(User user) {
+        return userJPARepository.save(user);
+    }
+
+    @Override
+    public Optional<User> findById(UUID id) {
+        return userJPARepository.findById(id);
+    }
 }

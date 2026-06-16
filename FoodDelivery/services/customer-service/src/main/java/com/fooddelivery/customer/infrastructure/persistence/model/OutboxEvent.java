@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.github.f4b6a3.uuid.UuidCreator;
 
 /**
  * Outbox event — stores domain events for reliable Kafka publishing.
@@ -41,7 +42,7 @@ public class OutboxEvent {
     private Instant createdAt;
 
     public OutboxEvent(String aggregateType, UUID aggregateId, String eventType, String payload) {
-        this.id = UUID.randomUUID();
+        this.id = UuidCreator.getTimeOrderedEpoch();
         this.aggregateType = aggregateType;
         this.aggregateId = aggregateId;
         this.eventType = eventType;
