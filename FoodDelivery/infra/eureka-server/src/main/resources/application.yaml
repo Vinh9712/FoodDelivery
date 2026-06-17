@@ -1,3 +1,26 @@
+server:
+  port: 8761
+
 spring:
   application:
     name: eureka-server
+
+# Standalone registry: the server itself must NOT register or fetch from a peer.
+eureka:
+  instance:
+    hostname: localhost
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/
+  server:
+    # In dev we disable self-preservation so dead instances are evicted quickly.
+    enable-self-preservation: false
+    eviction-interval-timer-in-ms: 15000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info

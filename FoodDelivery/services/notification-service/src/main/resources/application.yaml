@@ -1,6 +1,9 @@
 spring:
   application:
     name: notification-service
+  # Pull shared/centralised config; 'optional:' => still boots if Config Server is down.
+  config:
+    import: optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}
 server:
   port: 8086
 management:
