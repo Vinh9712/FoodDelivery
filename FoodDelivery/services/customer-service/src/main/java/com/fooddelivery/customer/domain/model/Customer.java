@@ -58,7 +58,7 @@ public class Customer extends BaseEntity {
 
     public static Customer create(User user, String fullName, String phone) {
         if (user == null || isBlank(fullName)) {
-            throw new IllegalArgumentException("user and fullName are required");
+            throw new IllegalArgumentException("User and Full Name are required");
         }
         Customer customer = new Customer();
         customer.user = user;
@@ -71,7 +71,7 @@ public class Customer extends BaseEntity {
 
     public void updateProfile(String fullName, String phone, String avatarUrl) {
         if (isBlank(fullName)) {
-            throw new IllegalArgumentException("fullName is required");
+            throw new IllegalArgumentException("Full Name is required");
         }
         this.fullName = fullName.trim();
         this.phone = phone;
