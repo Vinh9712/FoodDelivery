@@ -1,3 +1,21 @@
+server:
+  port: 8888
+
 spring:
   application:
     name: config-server
+  profiles:
+    # 'native' = serve configuration from the local filesystem / classpath
+    # instead of a remote Git repo. Config files live under classpath:/config.
+    active: native
+  cloud:
+    config:
+      server:
+        native:
+          search-locations: classpath:/config
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info

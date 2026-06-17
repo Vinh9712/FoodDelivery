@@ -1,68 +1,49 @@
 server:
   port: 8080
+
 spring:
+  application:
+    name: api-gateway
+  # Pull shared config from Config Server; 'optional:' => gateway still boots if it is down.
+  config:
+    import: optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}
   cloud:
     gateway:
       server:
         webflux:
+          # Auto-create routes from Eureka registry as a fallback (lb://<service-id>).
+          discovery:
+            locator:
+              enabled: false
+              lower-case-service-id: true
           routes:
             - id: customer-service
-              uri: http://localhost:8081
+              uri: lb://customer-service
               predicates:
-                - name: Path
-                  args:
-                    Path: /api/v1/customers/**
-                - name: Header
-                  args:
-                    Header: X-Client-Type, Web
+                - Path=/api/v1/customers/**
             - id: restaurant-service
-              uri: http://localhost:8082
+              uri: lb://restaurant-service
               predicates:
-                - name: Path
-                  args:
-                    Path: /api/v1/restaurant/**
-                - name: Header
-                  args:
-                    Header: X-Client-Type, Web
+                - Path=/api/v1/restaurant/**
             - id: order-service
-              uri: http://localhost:8083
+              uri: lb://order-service
               predicates:
-                - name: Path
-                  args:
-                    Path: /api/v1/order/**
-                - name: Header
-                  args:
-                    Header: X-Client-Type, Web
+                - Path=/api/v1/order/**
             - id: delivery-service
-              uri: http://localhost:8084
+              uri: lb://delivery-service
               predicates:
-                - name: Path
-                  args:
-                    Path: /api/v1/delivery/**
-                - name: Header
-                  args:
-                    Header: X-Client-Type, Web
+                - Path=/api/v1/delivery/**
             - id: payment-service
-              uri: http://localhost:8085
+              uri: lb://payment-service
               predicates:
-                - name: Path
-                  args:
-                    Path: /api/v1/payments/**
-                - name: Header
-                  args:
-                    Header: X-Client-Type, Web
+                - Path=/api/v1/payments/**
             - id: notification-service
-              uri: http://localhost:8086
+              uri: lb://notification-service
               predicates:
-                - name: Path
-                  args:
-                    Path: /api/v1/notifications/**
-                - name: Header
-                  args:
-                    Header: X-Client-Type, Web
+                - Path=/api/v1/notifications/**
           globalcors:
             cors-configurations:
-              [ /** ]:
+              '[/**]':
                 allowed-origins:
                   - "http://localhost:3000"
                   - "http://localhost:5173"
@@ -76,17 +57,40 @@ spring:
                 allowed-headers: "*"
                 allow-credentials: true
                 max-age: 3600
+
+  # ── Security: validate JWTs issued by Keycloak ──
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/fooddelivery}
+
+# ── Service Discovery ──
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URI:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true
+
+# ── Gateway security policy (consumed by SecurityConfig) ──
+app:
+  security:
+    # Endpoints reachable WITHOUT a JWT. Everything else requires authentication.
+    public-paths:
+      - /actuator/**
+      - /api/v1/customers/register
+      - /api/v1/customers/login
+
 management:
   endpoints:
     web:
       exposure:
-        include: health, info, gateway
+        include: health, info, gateway, metrics, prometheus
   endpoint:
     gateway:
       access: unrestricted
-  metrics:
-    tags:
-      application: api-gateway
-  logging:
-    level:
-      org.springframework.cloud.gateway: DEBUG
+
+logging:
+  level:
+    org.springframework.cloud.gateway: INFO
