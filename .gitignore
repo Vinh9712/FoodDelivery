@@ -39,4 +39,11 @@ build/
 ### Mac OS ###
 .DS_Store
 
+### Local secrets / env ###
+# Never commit real credentials; keep .env.example as the committed template.
+.env
+**/.env
+!.env.example
+!**/.env.example
+
 FOODDELIVERY_STRUCTURE.md

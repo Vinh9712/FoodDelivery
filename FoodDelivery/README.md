@@ -130,6 +130,17 @@ Chạy riêng customer-service:
 mvn -pl services/customer-service spring-boot:run
 ```
 
+### Chạy toàn bộ stack bằng Docker Compose
+
+```bash
+cp .env.example .env          # set DB_USER / DB_PASSWORD
+docker compose up --build
+```
+
+Compose dựng PostgreSQL + Kafka + Kafka-UI + Keycloak + Eureka + Config Server + API
+Gateway + 6 service, đúng thứ tự khởi động qua healthcheck. Credential DB lấy từ `.env`
+(không hardcode). Chi tiết: [docs/PLATFORM.md](docs/PLATFORM.md#run-the-whole-stack-with-docker-compose).
+
 ## Ghi chú
 
 - Root module hiện tại đã khai báo `infra`, `shared`, và `services` trong `pom.xml`.

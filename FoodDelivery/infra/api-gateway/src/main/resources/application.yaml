@@ -78,7 +78,8 @@ app:
   security:
     # Endpoints reachable WITHOUT a JWT. Everything else requires authentication.
     public-paths:
-      - /actuator/**
+      - /actuator/health/**
+      - /actuator/info
       - /api/v1/customers/register
       - /api/v1/customers/login
 

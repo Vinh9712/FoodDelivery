@@ -29,7 +29,7 @@ public class RequestLoggingFilter implements GlobalFilter, Ordered {
         // Reuse an inbound correlation id if present, otherwise generate one.
         String correlationId = request.getHeaders().getFirst(REQUEST_ID_HEADER);
         if (correlationId == null || correlationId.isBlank()) {
-            correlationId = UUID.randomUUID().toString().substring(0, 8);
+            correlationId = UUID.randomUUID().toString().replace("-", "");
         }
 
         // Forward the id downstream and echo it back to the client.
