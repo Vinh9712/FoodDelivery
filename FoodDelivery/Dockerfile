@@ -30,10 +30,12 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
+RUN useradd --system --uid 10001 --create-home --home-dir /home/app appuser
 
 # Spring Boot repackages the executable jar as <artifactId>-<version>.jar; the
 # non-executable original keeps a .jar.original extension, so this glob matches
 # exactly one file.
-COPY --from=build /build/${MODULE}/target/*.jar app.jar
+COPY --from=build --chown=10001:10001 /build/${MODULE}/target/*.jar /app/app.jar
+USER 10001:10001
 
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
