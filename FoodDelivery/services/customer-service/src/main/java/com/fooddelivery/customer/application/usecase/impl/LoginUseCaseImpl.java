@@ -3,12 +3,16 @@ package com.fooddelivery.customer.application.usecase.impl;
 import com.fooddelivery.commonweb.exception.BusinessRuleException;
 import com.fooddelivery.customer.application.command.LoginCommand;
 import com.fooddelivery.customer.api.dto.response.AuthResponse;
+import com.fooddelivery.customer.application.service.UserAgentParser;
 import com.fooddelivery.customer.application.usecase.LoginUseCase;
 import com.fooddelivery.customer.config.JwtTokenProvider;
 import com.fooddelivery.customer.domain.model.RefreshToken;
 import com.fooddelivery.customer.domain.model.User;
+import com.fooddelivery.customer.domain.model.UserSession;
 import com.fooddelivery.customer.domain.repository.RefreshTokenRepository;
 import com.fooddelivery.customer.domain.repository.UserRepository;
+import com.fooddelivery.customer.domain.repository.UserSessionRepository;
+import com.fooddelivery.customer.domain.vo.DeviceInfo;
 import com.fooddelivery.customer.utils.SecurityUtils;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -24,16 +28,22 @@ public class LoginUseCaseImpl implements LoginUseCase {
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
+    private final UserAgentParser userAgentParser;
+    private final UserSessionRepository userSessionRepository;
 
     public LoginUseCaseImpl(
             UserRepository userRepository,
             RefreshTokenRepository refreshTokenRepository,
             JwtTokenProvider jwtTokenProvider,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            UserAgentParser userAgentParser,
+            UserSessionRepository userSessionRepository) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.jwtTokenProvider = jwtTokenProvider;
         this.passwordEncoder = passwordEncoder;
+        this.userAgentParser = userAgentParser;
+        this.userSessionRepository = userSessionRepository;
     }
 
     @Override
@@ -53,6 +63,18 @@ public class LoginUseCaseImpl implements LoginUseCase {
         user.markLoggedIn();
         userRepository.save(user);
 
+        DeviceInfo deviceInfo = userAgentParser.parse(command.deviceInfo());
+
+        userSessionRepository.markNotCurrentByUserId(user.getId());
+        UserSession session = UserSession.create(
+                user,
+                deviceInfo.deviceName(),
+                deviceInfo.deviceType(),
+                deviceInfo.browser(),
+                deviceInfo.os(),
+                command.ipAddress());
+        session = userSessionRepository.save(session);
+
         String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getRole().name());
 
         String rawRefreshToken = SecurityUtils.generateRandomToken();
@@ -64,7 +86,8 @@ public class LoginUseCaseImpl implements LoginUseCase {
                 tokenHash,
                 expiryDate,
                 command.deviceInfo(),
-                command.ipAddress());
+                command.ipAddress(),
+                session.getId());
         refreshTokenRepository.save(refreshToken);
 
         return new AuthResponse(

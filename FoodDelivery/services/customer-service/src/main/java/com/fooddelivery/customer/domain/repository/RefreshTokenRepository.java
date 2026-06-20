@@ -9,4 +9,5 @@ public interface RefreshTokenRepository {
     Optional<RefreshToken> findByTokenHash(String tokenHash);
     void revokeAllByUserId(UUID userId);
     void revokeByTokenHash(String tokenHash);
+    void revokeAllBySessionId(UUID sessionId);
 }

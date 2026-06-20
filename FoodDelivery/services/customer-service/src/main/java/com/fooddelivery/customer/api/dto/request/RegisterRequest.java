@@ -1,6 +1,5 @@
 package com.fooddelivery.customer.api.dto.request;
 
-import com.fooddelivery.customer.domain.model.enums.UserRole;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -16,7 +15,10 @@ public record RegisterRequest(
     String phone,
 
     @NotBlank(message = "Password is required")
-    @Size(min = 6, message = "Password must be at least 6 characters")
+    @Pattern(
+        regexp = "^(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,}$",
+        message = "Password must be at least 8 characters, include 1 uppercase letter, 1 digit and 1 special character"
+    )
     String password,
 
     @NotBlank(message = "Full name is required")
