@@ -1,0 +1,33 @@
+# =====================================================================
+# SHARED configuration served by Config Server to ALL services.
+# Anything here is inherited by every config client. Override per
+# service in <service-name>.yaml (e.g. order-service.yaml).
+# =====================================================================
+
+# ── Service Discovery (Eureka) ──
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URI:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true
+    # Unique instance id so multiple instances on one host don't collide.
+    instance-id: ${spring.application.name}:${random.value}
+
+# ── Actuator / Monitoring ──
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
+  endpoint:
+    health:
+      show-details: ${ACTUATOR_HEALTH_DETAILS:never}
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+# ── Messaging (Kafka) common defaults ──
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}

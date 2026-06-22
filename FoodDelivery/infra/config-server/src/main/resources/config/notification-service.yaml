@@ -1,0 +1,4 @@
+# Notification Service – overrides on top of the shared application.yaml.
+# Add kafka consumer / mail config here as the service grows.
+server:
+  port: 8086

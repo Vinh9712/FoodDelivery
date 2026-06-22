@@ -1,47 +1,11 @@
 spring:
   application:
     name: payment-service
-
-  # ── DataSource ──
-  datasource:
-    url: jdbc:postgresql://localhost:5432/food_payment_db
-    username: postgres
-    password: postgres
-    driver-class-name: org.postgresql.Driver
-
-  # ── JPA / Hibernate ──
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    show-sql: false
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
-
-  # ── Flyway ──
-  flyway:
-    enabled: true
-    baseline-on-migrate: true
-    locations: classpath:db/migration
-
-  # ── Kafka ──
-  kafka:
-    bootstrap-servers: localhost:9092
-    consumer:
-      group-id: payment-service
-      auto-offset-reset: earliest
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      properties:
-        spring.json.trusted.packages: "com.fooddelivery.payment.*"
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-
+  # Pull shared/centralised config; 'optional:' => still boots if Config Server is down.
+  config:
+    import: optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}
 server:
   port: 8085
-
 management:
   endpoints:
     web:
