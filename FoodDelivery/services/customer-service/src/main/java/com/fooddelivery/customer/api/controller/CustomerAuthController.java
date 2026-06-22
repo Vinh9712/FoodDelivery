@@ -10,7 +10,7 @@ import com.fooddelivery.customer.application.command.LoginCommand;
 import com.fooddelivery.customer.application.command.LogoutCommand;
 import com.fooddelivery.customer.application.command.RefreshTokenCommand;
 import com.fooddelivery.customer.application.command.RegisterCustomerCommand;
-import com.fooddelivery.customer.application.service.RealIPExtractor;
+import com.fooddelivery.customer.utils.RealIPExtractor;
 import com.fooddelivery.customer.application.usecase.LoginUseCase;
 import com.fooddelivery.customer.application.usecase.LogoutUseCase;
 import com.fooddelivery.customer.application.usecase.RefreshTokenUseCase;
