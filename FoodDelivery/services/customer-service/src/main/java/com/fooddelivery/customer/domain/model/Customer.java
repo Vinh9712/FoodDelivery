@@ -3,6 +3,8 @@ package com.fooddelivery.customer.domain.model;
 import com.fooddelivery.commonweb.base.BaseEntity;
 import com.fooddelivery.customer.domain.exception.AddressNotFoundException;
 import com.fooddelivery.customer.domain.model.enums.CustomerType;
+import com.fooddelivery.customer.domain.model.valueobject.FullName;
+import com.fooddelivery.customer.domain.model.valueobject.PhoneNumber;
 import com.github.f4b6a3.uuid.UuidCreator;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -12,6 +14,7 @@ import org.hibernate.annotations.SQLRestriction;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -25,9 +28,8 @@ public class Customer extends BaseEntity {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
-    @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false, unique = true, referencedColumnName = "id")
-    private User user;
+    @Column(name = "user_id", nullable = false, unique = true)
+    private UUID userId;
 
     @Column(name = "full_name", nullable = false, length = 150)
     private String fullName;
@@ -47,7 +49,7 @@ public class Customer extends BaseEntity {
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id")
-    private List<Address> addresses = new ArrayList<>();
+    private final List<Address> addresses = new ArrayList<>();
 
     @PrePersist
     private void ensureId() {
@@ -56,25 +58,30 @@ public class Customer extends BaseEntity {
         }
     }
 
-    public static Customer create(User user, String fullName, String phone) {
-        if (user == null || isBlank(fullName)) {
-            throw new IllegalArgumentException("User and Full Name are required");
+    public static Customer create(UUID userId, String fullName, String phone) {
+        return create(userId, new FullName(fullName), phone != null ? new PhoneNumber(phone) : null);
+    }
+
+    public static Customer create(UUID userId, FullName fullName, PhoneNumber phone) {
+        if (userId == null) {
+            throw new IllegalArgumentException("userId is required");
         }
         Customer customer = new Customer();
-        customer.user = user;
-        customer.fullName = fullName.trim();
-        customer.phone = phone;
+        customer.userId = userId;
+        customer.fullName = fullName.value();
+        customer.phone = phone != null ? phone.value() : null;
         customer.customerType = CustomerType.REGULAR;
         customer.loyaltyPoints = 0;
         return customer;
     }
 
     public void updateProfile(String fullName, String phone, String avatarUrl) {
-        if (isBlank(fullName)) {
-            throw new IllegalArgumentException("Full Name is required");
-        }
-        this.fullName = fullName.trim();
-        this.phone = phone;
+        updateProfile(new FullName(fullName), phone != null ? new PhoneNumber(phone) : null, avatarUrl);
+    }
+
+    public void updateProfile(FullName fullName, PhoneNumber phone, String avatarUrl) {
+        this.fullName = fullName.value();
+        this.phone = phone != null ? phone.value() : null;
         this.avatarUrl = avatarUrl;
     }
 
@@ -94,40 +101,80 @@ public class Customer extends BaseEntity {
 
     public Address addAddress(String label, String addressLine, String district,
                               String city, BigDecimal latitude, BigDecimal longitude, boolean defaultAddress) {
-        if (defaultAddress) {
-            addresses.forEach(Address::unsetDefault);
+        boolean makeDefault = defaultAddress || activeAddresses().isEmpty();
+        if (makeDefault) {
+            activeAddresses().forEach(Address::unsetDefault);
         }
-        Address address = Address.create(label, addressLine, district, city, latitude, longitude, defaultAddress);
+        Address address = Address.create(label, addressLine, district, city, latitude, longitude, makeDefault);
         addresses.add(address);
         return address;
     }
 
+    public List<Address> getAddresses() {
+        return Collections.unmodifiableList(addresses);
+    }
+
+    public List<Address> getActiveAddresses() {
+        return Collections.unmodifiableList(activeAddresses());
+    }
+
+    public Address updateAddress(UUID addressId, String label, String addressLine, String district,
+                                 String city, BigDecimal latitude, BigDecimal longitude, boolean defaultAddress) {
+        Address address = findActiveAddress(addressId);
+        address.update(label, addressLine, district, city, latitude, longitude);
+        if (defaultAddress) {
+            setDefaultAddress(addressId);
+        } else if (address.isDefaultAddress() && activeAddresses().size() > 1) {
+            address.unsetDefault();
+            ensureOneDefaultAddress(address);
+        }
+        return address;
+    }
+
     public void removeAddress(UUID addressId) {
-        Address target = findAddress(addressId);
+        Address target = findActiveAddress(addressId);
+        boolean wasDefault = target.isDefaultAddress();
         target.softDelete();
-        if (target.isDefaultAddress()) {
+        if (wasDefault) {
             target.unsetDefault();
+            ensureOneDefaultAddress();
         }
     }
 
     public void setDefaultAddress(UUID addressId) {
-        Address target = findAddress(addressId);
+        Address target = findActiveAddress(addressId);
         target.setDefault();
-        addresses.forEach(a -> {
+        activeAddresses().forEach(a -> {
             if (!a.equals(target)) {
                 a.unsetDefault();
             }
         });
     }
 
-    private Address findAddress(UUID addressId) {
-        return addresses.stream()
+    public Address findActiveAddress(UUID addressId) {
+        return activeAddresses().stream()
                 .filter(a -> a.getId() != null && a.getId().equals(addressId))
                 .findFirst()
-                .orElseThrow(() -> new AddressNotFoundException("Address not found: " + addressId));
+                .orElseThrow(() -> new AddressNotFoundException(addressId));
     }
 
-    private static boolean isBlank(String value) {
-        return value == null || value.trim().isEmpty();
+    private List<Address> activeAddresses() {
+        return addresses.stream()
+                .filter(address -> !address.isDeleted())
+                .toList();
+    }
+
+    private void ensureOneDefaultAddress() {
+        ensureOneDefaultAddress(null);
+    }
+
+    private void ensureOneDefaultAddress(Address excludedAddress) {
+        List<Address> active = activeAddresses();
+        if (!active.isEmpty() && active.stream().noneMatch(Address::isDefaultAddress)) {
+            active.stream()
+                    .filter(address -> !address.equals(excludedAddress))
+                    .findFirst()
+                    .ifPresent(Address::setDefault);
+        }
     }
 }

@@ -55,7 +55,7 @@ public class RegisterCustomerUseCaseImpl implements RegisterCustomerUseCase {
         user = userRepository.save(user);
 
         Customer customer = null;
-        customer = Customer.create(user, command.fullName(), command.phone());
+        customer = Customer.create(user.getId(), command.fullName(), command.phone());
         customer = customerRepository.save(customer);
 
         try {

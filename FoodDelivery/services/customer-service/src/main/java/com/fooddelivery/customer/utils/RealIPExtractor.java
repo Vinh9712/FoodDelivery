@@ -1,4 +1,4 @@
-package com.fooddelivery.customer.application.service;
+package com.fooddelivery.customer.utils;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Component;

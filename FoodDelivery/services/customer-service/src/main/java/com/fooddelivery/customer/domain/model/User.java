@@ -2,6 +2,8 @@ package com.fooddelivery.customer.domain.model;
 
 import com.fooddelivery.commonweb.base.BaseEntity;
 import com.fooddelivery.customer.domain.model.enums.UserRole;
+import com.fooddelivery.customer.domain.model.valueobject.Email;
+import com.fooddelivery.customer.domain.model.valueobject.PhoneNumber;
 import com.github.f4b6a3.uuid.UuidCreator;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -55,12 +57,16 @@ public class User extends BaseEntity {
     }
 
     public static User register(String email, String phone, String passwordHash, UserRole role) {
-        if (isBlank(email) || isBlank(phone) || isBlank(passwordHash) || role == null) {
-            throw new IllegalArgumentException("email, phone, password and role are required");
+        return register(new Email(email), new PhoneNumber(phone), passwordHash, role);
+    }
+
+    public static User register(Email email, PhoneNumber phone, String passwordHash, UserRole role) {
+        if (isBlank(passwordHash) || role == null) {
+            throw new IllegalArgumentException("password and role are required");
         }
         User user = new User();
-        user.email = email.trim().toLowerCase();
-        user.phone = phone.trim();
+        user.email = email.value();
+        user.phone = phone.value();
         user.passwordHash = passwordHash;
         user.role = role;
         return user;
@@ -74,10 +80,11 @@ public class User extends BaseEntity {
     }
 
     public void updatePhone(String phone) {
-        if (isBlank(phone)) {
-            throw new IllegalArgumentException("phone is required");
-        }
-        this.phone = phone.trim();
+        updatePhone(new PhoneNumber(phone));
+    }
+
+    public void updatePhone(PhoneNumber phone) {
+        this.phone = phone.value();
     }
 
     public void markLoggedIn() {

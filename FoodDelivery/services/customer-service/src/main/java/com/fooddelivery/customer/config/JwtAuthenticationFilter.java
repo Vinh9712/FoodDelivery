@@ -4,6 +4,10 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import com.fooddelivery.customer.domain.model.User;
+import com.fooddelivery.customer.domain.model.UserSession;
+import com.fooddelivery.customer.domain.repository.UserRepository;
+import com.fooddelivery.customer.domain.repository.UserSessionRepository;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -20,9 +24,16 @@ import java.util.UUID;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider tokenProvider;
+    private final UserRepository userRepository;
+    private final UserSessionRepository userSessionRepository;
 
-    public JwtAuthenticationFilter(JwtTokenProvider tokenProvider) {
+    public JwtAuthenticationFilter(
+            JwtTokenProvider tokenProvider,
+            UserRepository userRepository,
+            UserSessionRepository userSessionRepository) {
         this.tokenProvider = tokenProvider;
+        this.userRepository = userRepository;
+        this.userSessionRepository = userSessionRepository;
     }
 
     @Override
@@ -34,9 +45,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
                 UUID userId = tokenProvider.getUserIdFromToken(jwt);
-                String email = tokenProvider.getEmailFromToken(jwt);
-                String role = tokenProvider.getRoleFromToken(jwt);
+                UUID sessionId = tokenProvider.getSessionIdFromToken(jwt);
+                User user = getActiveUserForSession(userId, sessionId);
 
+                if (user == null) {
+                    filterChain.doFilter(request, response);
+                    return;
+                }
+
+                String email = user.getEmail();
+                String role = user.getRole().name();
                 SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + role);
                 UserPrincipal principal = new UserPrincipal(userId, email, role);
 
@@ -51,6 +69,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private User getActiveUserForSession(UUID userId, UUID sessionId) {
+        if (userId == null || sessionId == null) {
+            return null;
+        }
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null || !user.isActive()) {
+            return null;
+        }
+        UserSession session = userSessionRepository.findById(sessionId).orElse(null);
+        if (session == null || session.isDeleted() || !session.getUser().getId().equals(userId)) {
+            return null;
+        }
+        return user;
     }
 
     private String getJwtFromRequest(HttpServletRequest request) {

@@ -1,11 +1,14 @@
 package com.fooddelivery.customer.domain.model.valueobject;
 
-import com.fooddelivery.customer.domain.exception.InvalidEmailException;
+import java.util.regex.Pattern;
 
 public record Email(String value) {
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[\\w.+-]+@[\\w-]+\\.[A-Za-z]{2,}$");
+
     public Email {
-        if (value == null || !value.matches("^[\\w.+-]+@[\\w-]+\\.[a-zA-Z]{2,}$")) {
-            throw new InvalidEmailException(value);
+        if (value == null || !EMAIL_PATTERN.matcher(value.trim()).matches()) {
+            throw new IllegalArgumentException("Invalid email: " + value);
         }
+        value = value.trim().toLowerCase();
     }
 }
