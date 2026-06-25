@@ -5,6 +5,7 @@ import com.fooddelivery.customer.infrastructure.persistence.OutboxEventRepositor
 import com.fooddelivery.customer.infrastructure.persistence.model.OutboxEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -17,6 +18,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @Component
+@ConditionalOnProperty(name = "app.kafka.enabled", havingValue = "true", matchIfMissing = true)
 public class OutboxRelayScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(OutboxRelayScheduler.class);

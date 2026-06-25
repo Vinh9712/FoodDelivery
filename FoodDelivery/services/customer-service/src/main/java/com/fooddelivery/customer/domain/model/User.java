@@ -96,6 +96,13 @@ public class User extends BaseEntity {
         this.active = true;
     }
 
+    public void changeRole(UserRole newRole) {
+        if (newRole == null) {
+            throw new IllegalArgumentException("role is required");
+        }
+        this.role = newRole;
+    }
+
     private static boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
     }

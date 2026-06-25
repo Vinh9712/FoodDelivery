@@ -22,6 +22,7 @@ spring:
               predicates:
                 - Path=/api/v1/customers/**
                 - Path=/api/v1/auth/**
+                - Path=/api/v1/admin/**
             - id: restaurant-service
               uri: lb://restaurant-service
               predicates:

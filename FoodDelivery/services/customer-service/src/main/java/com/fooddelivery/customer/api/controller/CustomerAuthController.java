@@ -10,6 +10,7 @@ import com.fooddelivery.customer.application.command.LoginCommand;
 import com.fooddelivery.customer.application.command.LogoutCommand;
 import com.fooddelivery.customer.application.command.RefreshTokenCommand;
 import com.fooddelivery.customer.application.command.RegisterCustomerCommand;
+import com.fooddelivery.customer.application.service.RealIPExtractor;
 import com.fooddelivery.customer.application.usecase.LoginUseCase;
 import com.fooddelivery.customer.application.usecase.LogoutUseCase;
 import com.fooddelivery.customer.application.usecase.RefreshTokenUseCase;
@@ -28,16 +29,19 @@ public class CustomerAuthController {
     private final LoginUseCase loginUseCase;
     private final RefreshTokenUseCase refreshTokenUseCase;
     private final LogoutUseCase logoutUseCase;
+    private final RealIPExtractor realIPExtractor;
 
     public CustomerAuthController(
             RegisterCustomerUseCase registerCustomerUseCase,
             LoginUseCase loginUseCase,
             RefreshTokenUseCase refreshTokenUseCase,
-            LogoutUseCase logoutUseCase) {
+            LogoutUseCase logoutUseCase,
+            RealIPExtractor realIPExtractor) {
         this.registerCustomerUseCase = registerCustomerUseCase;
         this.loginUseCase = loginUseCase;
         this.refreshTokenUseCase = refreshTokenUseCase;
         this.logoutUseCase = logoutUseCase;
+        this.realIPExtractor = realIPExtractor;
     }
 
     @PostMapping("/register")
@@ -57,7 +61,7 @@ public class CustomerAuthController {
             @Valid @RequestBody LoginRequest request,
             HttpServletRequest httpServletRequest) {
         String deviceInfo = httpServletRequest.getHeader("User-Agent");
-        String ipAddress = httpServletRequest.getRemoteAddr();
+        String ipAddress = realIPExtractor.extract(httpServletRequest);
         LoginCommand command = new LoginCommand(
                 request.email(),
                 request.password(),
@@ -72,7 +76,7 @@ public class CustomerAuthController {
             @Valid @RequestBody RefreshTokenRequest request,
             HttpServletRequest httpServletRequest) {
         String deviceInfo = httpServletRequest.getHeader("User-Agent");
-        String ipAddress = httpServletRequest.getRemoteAddr();
+        String ipAddress = realIPExtractor.extract(httpServletRequest);
         RefreshTokenCommand command = new RefreshTokenCommand(
                 request.refreshToken(),
                 deviceInfo,

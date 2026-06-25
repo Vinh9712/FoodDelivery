@@ -2,7 +2,7 @@ package com.fooddelivery.customer;
 
 import com.fooddelivery.commonweb.exception.BusinessRuleException;
 import com.fooddelivery.customer.application.command.LoginCommand;
-import com.fooddelivery.customer.application.usecase.LoginUseCase;
+import com.fooddelivery.customer.application.usecase.impl.LoginUseCaseImpl;
 import com.fooddelivery.customer.domain.model.User;
 import com.fooddelivery.customer.domain.model.enums.UserRole;
 import com.fooddelivery.customer.domain.repository.RefreshTokenRepository;
@@ -25,7 +25,7 @@ class LoginUseCaseTests {
     private RefreshTokenRepository refreshTokenRepository;
     private JwtTokenProvider jwtTokenProvider;
     private PasswordEncoder passwordEncoder;
-    private LoginUseCase useCase;
+    private LoginUseCaseImpl useCase;
 
     @BeforeEach
     void setUp() {
@@ -33,7 +33,7 @@ class LoginUseCaseTests {
         refreshTokenRepository = mock(RefreshTokenRepository.class);
         jwtTokenProvider = mock(JwtTokenProvider.class);
         passwordEncoder = mock(PasswordEncoder.class);
-        useCase = new LoginUseCase(
+        useCase = new LoginUseCaseImpl(
                 userRepository,
                 refreshTokenRepository,
                 jwtTokenProvider,

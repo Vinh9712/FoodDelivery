@@ -39,4 +39,9 @@ public class RefreshTokenRepositoryAdapter implements RefreshTokenRepository {
             refreshTokenJPARepository.save(token);
         }
     }
+
+    @Override
+    public void revokeAllBySessionId(UUID sessionId) {
+        refreshTokenJPARepository.revokeAllBySessionId(sessionId);
+    }
 }

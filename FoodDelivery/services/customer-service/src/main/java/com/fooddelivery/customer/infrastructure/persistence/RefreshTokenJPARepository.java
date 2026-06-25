@@ -17,4 +17,8 @@ public interface RefreshTokenJPARepository extends JpaRepository<RefreshToken, U
     @Modifying
     @Query("UPDATE RefreshToken r SET r.status = com.fooddelivery.customer.domain.model.enums.RefreshTokenStatus.REVOKED, r.revokedAt = CURRENT_TIMESTAMP WHERE r.user.id = :userId AND r.status = com.fooddelivery.customer.domain.model.enums.RefreshTokenStatus.ACTIVE")
     void revokeAllByUserId(@Param("userId") UUID userId);
+
+    @Modifying
+    @Query("UPDATE RefreshToken r SET r.status = com.fooddelivery.customer.domain.model.enums.RefreshTokenStatus.REVOKED, r.revokedAt = CURRENT_TIMESTAMP WHERE r.sessionId = :sessionId AND r.status = com.fooddelivery.customer.domain.model.enums.RefreshTokenStatus.ACTIVE")
+    void revokeAllBySessionId(@Param("sessionId") UUID sessionId);
 }

@@ -3,7 +3,7 @@ package com.fooddelivery.customer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fooddelivery.commonweb.exception.BusinessRuleException;
 import com.fooddelivery.customer.application.command.RegisterCustomerCommand;
-import com.fooddelivery.customer.application.usecase.RegisterCustomerUseCase;
+import com.fooddelivery.customer.application.usecase.impl.RegisterCustomerUseCaseImpl;
 import com.fooddelivery.customer.domain.model.User;
 import com.fooddelivery.customer.domain.model.Customer;
 import com.fooddelivery.customer.domain.model.enums.UserRole;
@@ -27,7 +27,7 @@ class RegisterCustomerUseCaseTests {
     private OutboxEventRepository outboxEventRepository;
     private PasswordEncoder passwordEncoder;
     private ObjectMapper objectMapper;
-    private RegisterCustomerUseCase useCase;
+    private RegisterCustomerUseCaseImpl useCase;
 
     @BeforeEach
     void setUp() {
@@ -37,7 +37,7 @@ class RegisterCustomerUseCaseTests {
         passwordEncoder = mock(PasswordEncoder.class);
         objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
-        useCase = new RegisterCustomerUseCase(
+        useCase = new RegisterCustomerUseCaseImpl(
                 userRepository,
                 customerRepository,
                 outboxEventRepository,

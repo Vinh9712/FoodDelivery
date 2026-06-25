@@ -45,6 +45,9 @@ public class RefreshToken extends BaseEntity {
     @Column(name = "ip_address", length = 45)
     private String ipAddress;
 
+    @Column(name = "session_id")
+    private UUID sessionId;
+
     @PrePersist
     private void ensureId() {
         if (id == null) {
@@ -53,6 +56,11 @@ public class RefreshToken extends BaseEntity {
     }
     public static RefreshToken issue(User user, String tokenHash, Instant expiresAt,
                                      String deviceInfo, String ipAddress) {
+        return issue(user, tokenHash, expiresAt, deviceInfo, ipAddress, null);
+    }
+
+    public static RefreshToken issue(User user, String tokenHash, Instant expiresAt,
+                                     String deviceInfo, String ipAddress, UUID sessionId) {
         if (user == null || isBlank(tokenHash) || expiresAt == null) {
             throw new IllegalArgumentException("user, tokenHash and expiresAt are required");
         }
@@ -63,6 +71,7 @@ public class RefreshToken extends BaseEntity {
         refreshToken.status = RefreshTokenStatus.ACTIVE;
         refreshToken.deviceInfo = deviceInfo;
         refreshToken.ipAddress = ipAddress;
+        refreshToken.sessionId = sessionId;
         return refreshToken;
     }
 
