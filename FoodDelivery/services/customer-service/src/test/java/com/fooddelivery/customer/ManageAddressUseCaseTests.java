@@ -3,7 +3,7 @@ package com.fooddelivery.customer;
 import com.fooddelivery.customer.application.command.AddAddressCommand;
 import com.fooddelivery.customer.application.command.RemoveAddressCommand;
 import com.fooddelivery.customer.api.dto.response.AddressResponse;
-import com.fooddelivery.customer.application.usecase.ManageAddressUseCase;
+import com.fooddelivery.customer.application.usecase.impl.ManageAddressUseCaseImpl;
 import com.fooddelivery.customer.domain.model.Address;
 import com.fooddelivery.customer.domain.model.Customer;
 import com.fooddelivery.customer.domain.model.User;
@@ -25,12 +25,12 @@ import static org.mockito.Mockito.*;
 class ManageAddressUseCaseTests {
 
     private CustomerRepository customerRepository;
-    private ManageAddressUseCase useCase;
+    private ManageAddressUseCaseImpl useCase;
 
     @BeforeEach
     void setUp() {
         customerRepository = mock(CustomerRepository.class);
-        useCase = new ManageAddressUseCase(customerRepository);
+        useCase = new ManageAddressUseCaseImpl(customerRepository);
     }
 
     private void setPrivateField(Object target, String fieldName, Object value) throws Exception {

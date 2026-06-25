@@ -3,7 +3,7 @@ package com.fooddelivery.customer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fooddelivery.commonweb.exception.BusinessRuleException;
 import com.fooddelivery.customer.application.command.UpdateProfileCommand;
-import com.fooddelivery.customer.application.usecase.UpdateProfileUseCase;
+import com.fooddelivery.customer.application.usecase.impl.UpdateProfileUseCaseImpl;
 import com.fooddelivery.customer.domain.model.Customer;
 import com.fooddelivery.customer.domain.model.User;
 import com.fooddelivery.customer.domain.model.enums.UserRole;
@@ -27,7 +27,7 @@ class UpdateProfileUseCaseTests {
     private UserRepository userRepository;
     private OutboxEventRepository outboxEventRepository;
     private ObjectMapper objectMapper;
-    private UpdateProfileUseCase useCase;
+    private UpdateProfileUseCaseImpl useCase;
 
     @BeforeEach
     void setUp() {
@@ -36,7 +36,7 @@ class UpdateProfileUseCaseTests {
         outboxEventRepository = mock(OutboxEventRepository.class);
         objectMapper = new ObjectMapper();
         objectMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
-        useCase = new UpdateProfileUseCase(
+        useCase = new UpdateProfileUseCaseImpl(
                 customerRepository,
                 userRepository,
                 outboxEventRepository,

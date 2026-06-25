@@ -1,7 +1,7 @@
 package com.fooddelivery.customer;
 
 import com.fooddelivery.customer.application.command.RefreshTokenCommand;
-import com.fooddelivery.customer.application.usecase.RefreshTokenUseCase;
+import com.fooddelivery.customer.application.usecase.impl.RefreshTokenUseCaseImpl;
 import com.fooddelivery.customer.api.dto.response.AuthResponse;
 import com.fooddelivery.customer.domain.model.RefreshToken;
 import com.fooddelivery.customer.domain.model.User;
@@ -23,13 +23,13 @@ class RefreshTokenUseCaseTests {
 
     private RefreshTokenRepository refreshTokenRepository;
     private JwtTokenProvider jwtTokenProvider;
-    private RefreshTokenUseCase useCase;
+    private RefreshTokenUseCaseImpl useCase;
 
     @BeforeEach
     void setUp() {
         refreshTokenRepository = mock(RefreshTokenRepository.class);
         jwtTokenProvider = mock(JwtTokenProvider.class);
-        useCase = new RefreshTokenUseCase(refreshTokenRepository, jwtTokenProvider);
+        useCase = new RefreshTokenUseCaseImpl(refreshTokenRepository, jwtTokenProvider);
     }
 
     @Test
