@@ -46,14 +46,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
                 UUID userId = tokenProvider.getUserIdFromToken(jwt);
                 UUID sessionId = tokenProvider.getSessionIdFromToken(jwt);
-                String email = tokenProvider.getEmailFromToken(jwt);
-                String role = tokenProvider.getRoleFromToken(jwt);
+                User user = getActiveUserForSession(userId, sessionId);
 
-                if (!isUserAndSessionActive(userId, sessionId)) {
+                if (user == null) {
                     filterChain.doFilter(request, response);
                     return;
                 }
 
+                String email = user.getEmail();
+                String role = user.getRole().name();
                 SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + role);
                 UserPrincipal principal = new UserPrincipal(userId, email, role);
 
@@ -70,16 +71,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private boolean isUserAndSessionActive(UUID userId, UUID sessionId) {
-        if (sessionId == null) {
-            return false;
+    private User getActiveUserForSession(UUID userId, UUID sessionId) {
+        if (userId == null || sessionId == null) {
+            return null;
         }
         User user = userRepository.findById(userId).orElse(null);
         if (user == null || !user.isActive()) {
-            return false;
+            return null;
         }
         UserSession session = userSessionRepository.findById(sessionId).orElse(null);
-        return session != null && !session.isDeleted() && session.getUser().getId().equals(userId);
+        if (session == null || session.isDeleted() || !session.getUser().getId().equals(userId)) {
+            return null;
+        }
+        return user;
     }
 
     private String getJwtFromRequest(HttpServletRequest request) {

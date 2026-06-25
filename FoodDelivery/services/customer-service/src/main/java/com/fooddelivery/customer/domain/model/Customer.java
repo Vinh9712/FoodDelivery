@@ -126,7 +126,7 @@ public class Customer extends BaseEntity {
             setDefaultAddress(addressId);
         } else if (address.isDefaultAddress() && activeAddresses().size() > 1) {
             address.unsetDefault();
-            ensureOneDefaultAddress();
+            ensureOneDefaultAddress(address);
         }
         return address;
     }
@@ -165,9 +165,16 @@ public class Customer extends BaseEntity {
     }
 
     private void ensureOneDefaultAddress() {
+        ensureOneDefaultAddress(null);
+    }
+
+    private void ensureOneDefaultAddress(Address excludedAddress) {
         List<Address> active = activeAddresses();
         if (!active.isEmpty() && active.stream().noneMatch(Address::isDefaultAddress)) {
-            active.get(0).setDefault();
+            active.stream()
+                    .filter(address -> !address.equals(excludedAddress))
+                    .findFirst()
+                    .ifPresent(Address::setDefault);
         }
     }
 }
