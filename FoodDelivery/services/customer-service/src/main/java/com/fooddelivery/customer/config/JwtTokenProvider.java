@@ -27,18 +27,20 @@ public class JwtTokenProvider {
         this.expirationMs = expirationMs;
     }
 
-    public String generateAccessToken(UUID userId, String email, String role) {
+    public String generateAccessToken(UUID userId, String email, String role, UUID sessionId) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + expirationMs);
-        return Jwts.builder()
+        var builder = Jwts.builder()
                 .subject(userId.toString())
                 .claim("jti", UuidCreator.getTimeOrderedEpoch().toString())
                 .claim("email", email)
                 .claim("role", role)
                 .issuedAt(now)
-                .expiration(expiryDate)
-                .signWith(key)
-                .compact();
+                .expiration(expiryDate);
+        if (sessionId != null) {
+            builder.claim("sid", sessionId.toString());
+        }
+        return builder.signWith(key).compact();
     }
 
     public boolean validateToken(String token) {
@@ -72,6 +74,11 @@ public class JwtTokenProvider {
 
     public String getRoleFromToken(String token) {
         return getClaimsFromToken(token).get("role", String.class);
+    }
+
+    public UUID getSessionIdFromToken(String token) {
+        String sid = getClaimsFromToken(token).get("sid", String.class);
+        return sid == null ? null : UUID.fromString(sid);
     }
 
 }

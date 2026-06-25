@@ -75,7 +75,11 @@ public class LoginUseCaseImpl implements LoginUseCase {
                 command.ipAddress());
         session = userSessionRepository.save(session);
 
-        String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getRole().name());
+        String accessToken = jwtTokenProvider.generateAccessToken(
+                user.getId(),
+                user.getEmail(),
+                user.getRole().name(),
+                session.getId());
 
         String rawRefreshToken = SecurityUtils.generateRandomToken();
         String tokenHash = SecurityUtils.hashToken(rawRefreshToken);
