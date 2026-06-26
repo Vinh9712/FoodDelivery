@@ -3,6 +3,16 @@ server:
   port: 8086
 
 spring:
+  kafka:
+    consumer:
+      group-id: notification-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.fooddelivery.notification.*,java.util"
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: java.util.Map
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/notification_db
     username: ${DB_USER}

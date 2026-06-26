@@ -9,4 +9,4 @@ CREATE TABLE drivers (
     available     BOOLEAN      NOT NULL DEFAULT TRUE
 );
 
-CREATE INDEX idx_drivers_available ON drivers (available) WHERE available = TRUE;
+CREATE INDEX idx_drivers_available ON drivers (available);

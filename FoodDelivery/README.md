@@ -93,7 +93,7 @@ API chính:
 
 ## Event model
 
-Theo structure hiện tại, service dùng event contract chung từ `shared/common-events` và publish qua RabbitMQ, không cần Kafka.
+Theo structure hiện tại, service dùng event contract chung từ `shared/common-events` và publish qua Kafka.
 
 Event chính:
 - `customer.registered`

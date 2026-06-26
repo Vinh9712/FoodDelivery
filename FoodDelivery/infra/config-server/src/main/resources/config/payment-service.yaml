@@ -4,7 +4,7 @@ server:
 
 spring:
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/payment_db
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/food_payment_db
     username: ${DB_USER}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
@@ -20,3 +20,16 @@ spring:
     enabled: true
     baseline-on-migrate: true
     locations: classpath:db/migration
+  kafka:
+    consumer:
+      group-id: payment-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.fooddelivery.payment.*,java.util"
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: java.util.Map
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer

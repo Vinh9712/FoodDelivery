@@ -93,19 +93,19 @@ public class DeliveryAssignmentService {
     private String buildDriverAssignedPayload(Delivery delivery, Driver driver) {
         try {
             ObjectNode root = objectMapper.createObjectNode();
-            root.put("order_id", delivery.getOrderId().toString());
-            root.put("delivery_id", delivery.getId().toString());
+            root.put("orderId", delivery.getOrderId().toString());
+            root.put("deliveryId", delivery.getId().toString());
 
             ObjectNode driverNode = objectMapper.createObjectNode();
-            driverNode.put("driver_id", driver.getId().toString());
-            driverNode.put("full_name", driver.getFullName());
+            driverNode.put("driverId", driver.getId().toString());
+            driverNode.put("fullName", driver.getFullName());
             driverNode.put("phone", driver.getPhone());
-            driverNode.put("vehicle_type", driver.getVehicleType().name());
-            driverNode.put("license_plate", driver.getLicensePlate());
-            driverNode.put("avg_rating", driver.getAvgRating());
+            driverNode.put("vehicleType", driver.getVehicleType().name());
+            driverNode.put("licensePlate", driver.getLicensePlate());
+            driverNode.put("avgRating", driver.getAvgRating());
             root.set("driver", driverNode);
 
-            root.put("assigned_at", Instant.now().toString());
+            root.put("assignedAt", Instant.now().toString());
 
             return objectMapper.writeValueAsString(root);
         } catch (Exception e) {

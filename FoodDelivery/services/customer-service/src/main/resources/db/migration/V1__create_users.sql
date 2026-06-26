@@ -20,4 +20,4 @@ CREATE TABLE users (
 CREATE INDEX idx_users_email      ON users (email);
 CREATE INDEX idx_users_phone      ON users (phone);
 CREATE INDEX idx_users_role       ON users (role);
-CREATE INDEX idx_users_is_active  ON users (is_active) WHERE is_active = TRUE;
+CREATE INDEX idx_users_is_active  ON users (is_active);

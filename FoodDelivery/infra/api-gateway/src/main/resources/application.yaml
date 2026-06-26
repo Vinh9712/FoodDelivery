@@ -20,13 +20,11 @@ spring:
             - id: customer-service
               uri: lb://customer-service
               predicates:
-                - Path=/api/v1/customers/**
-                - Path=/api/v1/auth/**
-                - Path=/api/v1/admin/**
+                - Path=/api/v1/customers/**,/api/v1/auth/**,/api/v1/admin/**,/api/v1/sessions/**
             - id: restaurant-service
               uri: lb://restaurant-service
               predicates:
-                - Path=/api/v1/restaurant/**
+                - Path=/api/v1/restaurants/**,/api/v1/reviews/**,/api/v1/items/**,/api/v1/categories/**
             - id: order-service
               uri: lb://order-service
               predicates:
@@ -34,7 +32,7 @@ spring:
             - id: delivery-service
               uri: lb://delivery-service
               predicates:
-                - Path=/api/v1/delivery/**
+                - Path=/api/v1/deliveries/**
             - id: payment-service
               uri: lb://payment-service
               predicates:
@@ -60,14 +58,14 @@ spring:
                 allow-credentials: true
                 max-age: 3600
 
-  # ── Security: validate JWTs issued by Keycloak ──
+  # -- Security: validate JWTs issued by Keycloak --
   security:
     oauth2:
       resourceserver:
         jwt:
           issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/fooddelivery}
 
-# ── Service Discovery ──
+# -- Service Discovery --
 eureka:
   client:
     service-url:
@@ -75,15 +73,16 @@ eureka:
   instance:
     prefer-ip-address: true
 
-# ── Gateway security policy (consumed by SecurityConfig) ──
+# -- Gateway security policy (consumed by SecurityConfig) --
 app:
   security:
     # Endpoints reachable WITHOUT a JWT. Everything else requires authentication.
     public-paths:
       - /actuator/health/**
       - /actuator/info
-      - /api/v1/customers/register
-      - /api/v1/customers/login
+      - /api/v1/auth/register
+      - /api/v1/auth/login
+      - /api/v1/auth/refresh
 
 management:
   endpoints:

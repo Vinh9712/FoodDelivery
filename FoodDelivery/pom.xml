@@ -60,6 +60,23 @@
                 <artifactId>common-web</artifactId>
                 <version>${project.version}</version>
             </dependency>
+
+            <!-- ── Distributed Tracing (Micrometer + Brave + Zipkin) ── -->
+            <dependency>
+                <groupId>io.micrometer</groupId>
+                <artifactId>micrometer-tracing-bridge-brave</artifactId>
+                <version>1.5.1</version>
+            </dependency>
+            <dependency>
+                <groupId>io.zipkin.reporter2</groupId>
+                <artifactId>zipkin-reporter-brave</artifactId>
+                <version>3.4.2</version>
+            </dependency>
+            <dependency>
+                <groupId>io.micrometer</groupId>
+                <artifactId>micrometer-registry-prometheus</artifactId>
+                <version>1.14.6</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
