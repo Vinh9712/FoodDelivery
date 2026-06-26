@@ -21,7 +21,7 @@ public record CreateOrderRequest(
         @Positive(message = "Total amount must be positive")
         BigDecimal totalAmount,
 
-        String currency
+        String currency,
         String deliveryAddress,
         BigDecimal deliveryFee,
         BigDecimal discountAmount,
