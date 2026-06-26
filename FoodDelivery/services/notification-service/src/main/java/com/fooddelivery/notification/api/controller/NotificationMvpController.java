@@ -20,7 +20,7 @@ import java.util.Map;
  * </p>
  */
 @RestController
-@RequestMapping("/api/notifications")
+@RequestMapping({"/api/notifications", "/api/v1/notifications"})
 public class NotificationMvpController {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationMvpController.class);
