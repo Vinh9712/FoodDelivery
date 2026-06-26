@@ -275,8 +275,14 @@ services:
     container_name: fd-payment-service
     depends_on:
       <<: *infra-deps
+      postgres:
+        condition: service_healthy
     environment:
       <<: *discovery-env
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
     ports:
       - "8085:8085"
     healthcheck:
@@ -292,8 +298,14 @@ services:
     container_name: fd-notification-service
     depends_on:
       <<: *infra-deps
+      postgres:
+        condition: service_healthy
     environment:
       <<: *discovery-env
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
     ports:
       - "8086:8086"
     healthcheck:

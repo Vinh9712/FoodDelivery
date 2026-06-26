@@ -21,7 +21,7 @@ import java.util.UUID;
  * </p>
  */
 @RestController
-@RequestMapping("/api/payments")
+@RequestMapping({"/api/payments", "/api/v1/payments"})
 public class PaymentMvpController {
 
     private static final Logger log = LoggerFactory.getLogger(PaymentMvpController.class);
