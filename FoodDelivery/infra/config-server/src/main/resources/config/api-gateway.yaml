@@ -1,0 +1,81 @@
+# API Gateway – route/security overrides on top of the shared application.yaml.
+server:
+  port: 8080
+
+spring:
+  cloud:
+    gateway:
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: false
+              lower-case-service-id: true
+          routes:
+            - id: customer-service
+              uri: lb://customer-service
+              predicates:
+                - Path=/api/v1/customers/**,/api/v1/auth/**,/api/v1/admin/**,/api/v1/sessions/**
+            - id: restaurant-service
+              uri: lb://restaurant-service
+              predicates:
+                - Path=/api/v1/restaurants/**,/api/v1/reviews/**,/api/v1/items/**,/api/v1/categories/**
+            - id: order-service
+              uri: lb://order-service
+              predicates:
+                - Path=/api/v1/orders/**
+            - id: delivery-service
+              uri: lb://delivery-service
+              predicates:
+                - Path=/api/v1/deliveries/**
+            - id: payment-service
+              uri: lb://payment-service
+              predicates:
+                - Path=/api/v1/payments/**
+            - id: notification-service
+              uri: lb://notification-service
+              predicates:
+                - Path=/api/v1/notifications/**
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowed-origins:
+                  - "http://localhost:3000"
+                  - "http://localhost:5173"
+                allowed-methods:
+                  - GET
+                  - POST
+                  - PUT
+                  - PATCH
+                  - DELETE
+                  - OPTIONS
+                allowed-headers: "*"
+                allow-credentials: true
+                max-age: 3600
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/fooddelivery}
+
+app:
+  security:
+    public-paths:
+      - /actuator/health/**
+      - /actuator/info
+      - /api/v1/auth/register
+      - /api/v1/auth/login
+      - /api/v1/auth/refresh
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, gateway, metrics, prometheus
+  endpoint:
+    gateway:
+      access: unrestricted
+
+logging:
+  level:
+    org.springframework.cloud.gateway: ${GATEWAY_LOG_LEVEL:INFO}

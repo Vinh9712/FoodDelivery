@@ -206,8 +206,18 @@ services:
     container_name: fd-restaurant-service
     depends_on:
       <<: *infra-deps
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     environment:
       <<: *discovery-env
+      KAFKA_BOOTSTRAP: kafka:9092
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
     ports:
       - "8082:8082"
     healthcheck:

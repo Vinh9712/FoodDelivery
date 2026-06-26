@@ -4,13 +4,5 @@ spring:
   threads:
     virtual:
       enabled: true  # Java 21 Virtual Threads
-  # Pull shared/centralised config; 'optional:' => still boots if Config Server is down.
   config:
     import: optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}
-server:
-  port: 8085
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health, info, metrics, prometheus
