@@ -27,7 +27,7 @@ public class RefreshTokenRepositoryAdapter implements RefreshTokenRepository {
 
     @Override
     public void revokeAllByUserId(UUID userId) {
-        refreshTokenJPARepository.revokeAllByUserId(userId);
+        refreshTokenJPARepository.revokeAllByUserId(userId, java.time.Instant.now());
     }
 
     @Override
@@ -42,6 +42,6 @@ public class RefreshTokenRepositoryAdapter implements RefreshTokenRepository {
 
     @Override
     public void revokeAllBySessionId(UUID sessionId) {
-        refreshTokenJPARepository.revokeAllBySessionId(sessionId);
+        refreshTokenJPARepository.revokeAllBySessionId(sessionId, java.time.Instant.now());
     }
 }

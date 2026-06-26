@@ -25,6 +25,8 @@ class LoginUseCaseTests {
     private RefreshTokenRepository refreshTokenRepository;
     private JwtTokenProvider jwtTokenProvider;
     private PasswordEncoder passwordEncoder;
+    private com.fooddelivery.customer.application.service.UserAgentParser userAgentParser;
+    private com.fooddelivery.customer.domain.repository.UserSessionRepository userSessionRepository;
     private LoginUseCaseImpl useCase;
 
     @BeforeEach
@@ -33,11 +35,25 @@ class LoginUseCaseTests {
         refreshTokenRepository = mock(RefreshTokenRepository.class);
         jwtTokenProvider = mock(JwtTokenProvider.class);
         passwordEncoder = mock(PasswordEncoder.class);
+        userAgentParser = mock(com.fooddelivery.customer.application.service.UserAgentParser.class);
+        userSessionRepository = mock(com.fooddelivery.customer.domain.repository.UserSessionRepository.class);
+
+        // Mock default behavior for userAgentParser
+        when(userAgentParser.parse(any())).thenReturn(new com.fooddelivery.customer.domain.vo.DeviceInfo("unknown", "unknown", "unknown", "unknown"));
+
+        // Mock default behavior for userSessionRepository
+        when(userSessionRepository.save(any())).thenAnswer(invocation -> {
+            com.fooddelivery.customer.domain.model.UserSession session = invocation.getArgument(0);
+            return session;
+        });
+
         useCase = new LoginUseCaseImpl(
                 userRepository,
                 refreshTokenRepository,
                 jwtTokenProvider,
-                passwordEncoder);
+                passwordEncoder,
+                userAgentParser,
+                userSessionRepository);
     }
 
     @Test

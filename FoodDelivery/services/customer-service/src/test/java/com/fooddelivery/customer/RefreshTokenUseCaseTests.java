@@ -23,13 +23,22 @@ class RefreshTokenUseCaseTests {
 
     private RefreshTokenRepository refreshTokenRepository;
     private JwtTokenProvider jwtTokenProvider;
+    private com.fooddelivery.customer.application.service.UserAgentParser userAgentParser;
+    private com.fooddelivery.customer.domain.repository.UserSessionRepository userSessionRepository;
     private RefreshTokenUseCaseImpl useCase;
 
     @BeforeEach
     void setUp() {
         refreshTokenRepository = mock(RefreshTokenRepository.class);
         jwtTokenProvider = mock(JwtTokenProvider.class);
-        useCase = new RefreshTokenUseCaseImpl(refreshTokenRepository, jwtTokenProvider);
+        userAgentParser = mock(com.fooddelivery.customer.application.service.UserAgentParser.class);
+        userSessionRepository = mock(com.fooddelivery.customer.domain.repository.UserSessionRepository.class);
+
+        useCase = new RefreshTokenUseCaseImpl(
+                refreshTokenRepository,
+                jwtTokenProvider,
+                userAgentParser,
+                userSessionRepository);
     }
 
     @Test

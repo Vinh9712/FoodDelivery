@@ -16,7 +16,7 @@
 
 name: fooddelivery
 
-# ── Reusable fragments ──────────────────────────────────────────────
+# Reusable fragments 
 x-maven-build: &maven-build
   context: .
   dockerfile: Dockerfile
@@ -43,7 +43,7 @@ x-actuator-health: &actuator-health
   start_period: 60s
 
 services:
-  # ── Backing services ──────────────────────────────────────────────
+  #  Backing services 
   postgres:
     image: postgres:16
     container_name: fd-postgres
@@ -120,7 +120,7 @@ services:
       retries: 10
     networks: [backend]
 
-  # ── Platform infrastructure (Spring) ──────────────────────────────
+  # --- Platform infrastructure (Spring) ---
   eureka-server:
     <<: *app-base
     build:
@@ -170,7 +170,7 @@ services:
       <<: *actuator-health
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
 
-  # ── Business services ─────────────────────────────────────────────
+  # --- Business services ---
   customer-service:
     <<: *app-base
     build:
@@ -234,6 +234,7 @@ services:
       DB_PORT: "5432"
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
     ports:
       - "8083:8083"
     healthcheck:
@@ -260,6 +261,7 @@ services:
       DB_PORT: "5432"
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
     ports:
       - "8084:8084"
     healthcheck:
@@ -275,8 +277,18 @@ services:
     container_name: fd-payment-service
     depends_on:
       <<: *infra-deps
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     environment:
       <<: *discovery-env
+      KAFKA_BOOTSTRAP: kafka:9092
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
     ports:
       - "8085:8085"
     healthcheck:
@@ -292,16 +304,55 @@ services:
     container_name: fd-notification-service
     depends_on:
       <<: *infra-deps
+      kafka:
+        condition: service_healthy
     environment:
       <<: *discovery-env
+      KAFKA_BOOTSTRAP: kafka:9092
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
     ports:
       - "8086:8086"
     healthcheck:
       <<: *actuator-health
       test: ["CMD-SHELL", "curl -fsS http://localhost:8086/actuator/health || exit 1"]
 
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: fd-prometheus
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks: [backend]
+
+  grafana:
+    image: grafana/grafana:11.1.4
+    container_name: fd-grafana
+    depends_on:
+      prometheus:
+        condition: service_started
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks: [backend]
+
+  zipkin:
+    image: openzipkin/zipkin:3.4
+    container_name: fd-zipkin
+    ports:
+      - "9411:9411"
+    networks: [backend]
 volumes:
   pgdata:
+  grafana-data:
 
 networks:
   backend:

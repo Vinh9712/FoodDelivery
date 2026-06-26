@@ -15,10 +15,10 @@ public interface RefreshTokenJPARepository extends JpaRepository<RefreshToken, U
     Optional<RefreshToken> findByTokenHash(String tokenHash);
 
     @Modifying
-    @Query("UPDATE RefreshToken r SET r.status = com.fooddelivery.customer.domain.model.enums.RefreshTokenStatus.REVOKED, r.revokedAt = CURRENT_TIMESTAMP WHERE r.user.id = :userId AND r.status = com.fooddelivery.customer.domain.model.enums.RefreshTokenStatus.ACTIVE")
-    void revokeAllByUserId(@Param("userId") UUID userId);
+    @Query("UPDATE RefreshToken r SET r.status = com.fooddelivery.customer.domain.model.enums.RefreshTokenStatus.REVOKED, r.revokedAt = :revokedAt WHERE r.user.id = :userId AND r.status = com.fooddelivery.customer.domain.model.enums.RefreshTokenStatus.ACTIVE")
+    void revokeAllByUserId(@Param("userId") UUID userId, @Param("revokedAt") java.time.Instant revokedAt);
 
     @Modifying
-    @Query("UPDATE RefreshToken r SET r.status = com.fooddelivery.customer.domain.model.enums.RefreshTokenStatus.REVOKED, r.revokedAt = CURRENT_TIMESTAMP WHERE r.sessionId = :sessionId AND r.status = com.fooddelivery.customer.domain.model.enums.RefreshTokenStatus.ACTIVE")
-    void revokeAllBySessionId(@Param("sessionId") UUID sessionId);
+    @Query("UPDATE RefreshToken r SET r.status = com.fooddelivery.customer.domain.model.enums.RefreshTokenStatus.REVOKED, r.revokedAt = :revokedAt WHERE r.sessionId = :sessionId AND r.status = com.fooddelivery.customer.domain.model.enums.RefreshTokenStatus.ACTIVE")
+    void revokeAllBySessionId(@Param("sessionId") UUID sessionId, @Param("revokedAt") java.time.Instant revokedAt);
 }
