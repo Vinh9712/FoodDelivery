@@ -1,6 +1,7 @@
 package com.fooddelivery.customer;
 
 import com.fooddelivery.customer.application.command.RefreshTokenCommand;
+import com.fooddelivery.customer.application.service.UserAgentParser;
 import com.fooddelivery.customer.application.usecase.impl.RefreshTokenUseCaseImpl;
 import com.fooddelivery.customer.api.dto.response.AuthResponse;
 import com.fooddelivery.customer.domain.model.RefreshToken;
@@ -8,6 +9,7 @@ import com.fooddelivery.customer.domain.model.User;
 import com.fooddelivery.customer.domain.model.enums.RefreshTokenStatus;
 import com.fooddelivery.customer.domain.model.enums.UserRole;
 import com.fooddelivery.customer.domain.repository.RefreshTokenRepository;
+import com.fooddelivery.customer.domain.repository.UserSessionRepository;
 import com.fooddelivery.customer.config.JwtTokenProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,17 +25,16 @@ class RefreshTokenUseCaseTests {
 
     private RefreshTokenRepository refreshTokenRepository;
     private JwtTokenProvider jwtTokenProvider;
-    private com.fooddelivery.customer.application.service.UserAgentParser userAgentParser;
-    private com.fooddelivery.customer.domain.repository.UserSessionRepository userSessionRepository;
+    private UserAgentParser userAgentParser;
+    private UserSessionRepository userSessionRepository;
     private RefreshTokenUseCaseImpl useCase;
 
     @BeforeEach
     void setUp() {
         refreshTokenRepository = mock(RefreshTokenRepository.class);
         jwtTokenProvider = mock(JwtTokenProvider.class);
-        userAgentParser = mock(com.fooddelivery.customer.application.service.UserAgentParser.class);
-        userSessionRepository = mock(com.fooddelivery.customer.domain.repository.UserSessionRepository.class);
-
+        userAgentParser = mock(UserAgentParser.class);
+        userSessionRepository = mock(UserSessionRepository.class);
         useCase = new RefreshTokenUseCaseImpl(
                 refreshTokenRepository,
                 jwtTokenProvider,
@@ -56,7 +57,7 @@ class RefreshTokenUseCaseTests {
         );
 
         when(refreshTokenRepository.findByTokenHash(hashedToken)).thenReturn(Optional.of(oldToken));
-        when(jwtTokenProvider.generateAccessToken(any(), any(), any())).thenReturn("newAccessToken");
+        when(jwtTokenProvider.generateAccessToken(any(), any(), any(), any())).thenReturn("newAccessToken");
         when(jwtTokenProvider.getExpirationMs()).thenReturn(3600000L);
 
         RefreshTokenCommand command = new RefreshTokenCommand(rawToken, "newDevice", "127.0.0.2");

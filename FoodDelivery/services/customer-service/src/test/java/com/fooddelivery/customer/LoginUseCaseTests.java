@@ -2,12 +2,16 @@ package com.fooddelivery.customer;
 
 import com.fooddelivery.commonweb.exception.BusinessRuleException;
 import com.fooddelivery.customer.application.command.LoginCommand;
+import com.fooddelivery.customer.application.service.UserAgentParser;
 import com.fooddelivery.customer.application.usecase.impl.LoginUseCaseImpl;
 import com.fooddelivery.customer.domain.model.User;
+import com.fooddelivery.customer.domain.model.UserSession;
 import com.fooddelivery.customer.domain.model.enums.UserRole;
 import com.fooddelivery.customer.domain.repository.RefreshTokenRepository;
+import com.fooddelivery.customer.domain.repository.UserSessionRepository;
 import com.fooddelivery.customer.domain.repository.UserRepository;
 import com.fooddelivery.customer.config.JwtTokenProvider;
+import com.fooddelivery.customer.domain.vo.DeviceInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -25,8 +29,8 @@ class LoginUseCaseTests {
     private RefreshTokenRepository refreshTokenRepository;
     private JwtTokenProvider jwtTokenProvider;
     private PasswordEncoder passwordEncoder;
-    private com.fooddelivery.customer.application.service.UserAgentParser userAgentParser;
-    private com.fooddelivery.customer.domain.repository.UserSessionRepository userSessionRepository;
+    private UserAgentParser userAgentParser;
+    private UserSessionRepository userSessionRepository;
     private LoginUseCaseImpl useCase;
 
     @BeforeEach
@@ -35,18 +39,10 @@ class LoginUseCaseTests {
         refreshTokenRepository = mock(RefreshTokenRepository.class);
         jwtTokenProvider = mock(JwtTokenProvider.class);
         passwordEncoder = mock(PasswordEncoder.class);
-        userAgentParser = mock(com.fooddelivery.customer.application.service.UserAgentParser.class);
-        userSessionRepository = mock(com.fooddelivery.customer.domain.repository.UserSessionRepository.class);
-
-        // Mock default behavior for userAgentParser
-        when(userAgentParser.parse(any())).thenReturn(new com.fooddelivery.customer.domain.vo.DeviceInfo("unknown", "unknown", "unknown", "unknown"));
-
-        // Mock default behavior for userSessionRepository
-        when(userSessionRepository.save(any())).thenAnswer(invocation -> {
-            com.fooddelivery.customer.domain.model.UserSession session = invocation.getArgument(0);
-            return session;
-        });
-
+        userAgentParser = mock(UserAgentParser.class);
+        userSessionRepository = mock(UserSessionRepository.class);
+        when(userAgentParser.parse(any())).thenReturn(new DeviceInfo("DESKTOP", "Chrome", "Windows", "Computer"));
+        when(userSessionRepository.save(any(UserSession.class))).thenAnswer(invocation -> invocation.getArgument(0));
         useCase = new LoginUseCaseImpl(
                 userRepository,
                 refreshTokenRepository,
@@ -82,7 +78,7 @@ class LoginUseCaseTests {
         User user = User.register("test@gmail.com", "0987654321", "hashed", UserRole.CUSTOMER);
         when(userRepository.findByEmail(any())).thenReturn(Optional.of(user));
         when(passwordEncoder.matches(any(), any())).thenReturn(true);
-        when(jwtTokenProvider.generateAccessToken(any(), any(), any())).thenReturn("accessToken");
+        when(jwtTokenProvider.generateAccessToken(any(), any(), any(), any())).thenReturn("accessToken");
         when(jwtTokenProvider.getExpirationMs()).thenReturn(3600000L);
 
         AuthResponse response = useCase.execute(command);

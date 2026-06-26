@@ -1,9 +1,11 @@
 package com.fooddelivery.customer.infrastructure.persistence;
 
 import com.fooddelivery.customer.domain.model.RefreshToken;
+import com.fooddelivery.customer.domain.model.enums.RefreshTokenStatus;
 import com.fooddelivery.customer.domain.repository.RefreshTokenRepository;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -27,7 +29,11 @@ public class RefreshTokenRepositoryAdapter implements RefreshTokenRepository {
 
     @Override
     public void revokeAllByUserId(UUID userId) {
-        refreshTokenJPARepository.revokeAllByUserId(userId, java.time.Instant.now());
+        refreshTokenJPARepository.revokeAllByUserId(
+                userId,
+                RefreshTokenStatus.ACTIVE,
+                RefreshTokenStatus.REVOKED,
+                Instant.now());
     }
 
     @Override
@@ -42,6 +48,10 @@ public class RefreshTokenRepositoryAdapter implements RefreshTokenRepository {
 
     @Override
     public void revokeAllBySessionId(UUID sessionId) {
-        refreshTokenJPARepository.revokeAllBySessionId(sessionId, java.time.Instant.now());
+        refreshTokenJPARepository.revokeAllBySessionId(
+                sessionId,
+                RefreshTokenStatus.ACTIVE,
+                RefreshTokenStatus.REVOKED,
+                Instant.now());
     }
 }

@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -22,5 +23,5 @@ public interface UserJPARepository extends JpaRepository<User, UUID>, JpaSpecifi
     long countByRole(UserRole role);
 
     @Query("SELECT u FROM User u WHERE LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(u.phone) LIKE LOWER(CONCAT('%', :search, '%'))")
-    java.util.List<User> searchUsers(@Param("search") String search);
+    List<User> searchUsers(@Param("search") String search);
 }

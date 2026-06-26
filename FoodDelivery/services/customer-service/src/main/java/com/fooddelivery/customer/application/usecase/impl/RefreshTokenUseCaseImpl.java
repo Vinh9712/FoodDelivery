@@ -65,8 +65,11 @@ public class RefreshTokenUseCaseImpl implements RefreshTokenUseCase {
             });
         }
 
-        String newAccessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(),
-                user.getRole().name());
+        String newAccessToken = jwtTokenProvider.generateAccessToken(
+                user.getId(),
+                user.getEmail(),
+                user.getRole().name(),
+                sessionId);
         String rawRefreshToken = SecurityUtils.generateRandomToken();
         String newTokenHash = SecurityUtils.hashToken(rawRefreshToken);
         Instant expiryDate = Instant.now().plus(7, ChronoUnit.DAYS);

@@ -31,8 +31,7 @@ public class ManageAddressUseCaseImpl implements ManageAddressUseCase {
         Customer customer = customerRepository.findByUserId(userId)
                 .orElseThrow(() -> new NotFoundException("Customer profile not found"));
 
-        return customer.getAddresses().stream()
-                .filter(address -> !address.isDeleted())
+        return customer.getActiveAddresses().stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
@@ -43,11 +42,6 @@ public class ManageAddressUseCaseImpl implements ManageAddressUseCase {
         Customer customer = customerRepository.findByUserId(command.userId())
                 .orElseThrow(() -> new NotFoundException("Customer profile not found"));
 
-        boolean isFirstAddress = customer.getAddresses().stream()
-                .noneMatch(address -> !address.isDeleted());
-
-        boolean makeDefault = command.defaultAddress() || isFirstAddress;
-
         Address address = customer.addAddress(
                 command.label(),
                 command.addressLine(),
@@ -55,7 +49,7 @@ public class ManageAddressUseCaseImpl implements ManageAddressUseCase {
                 command.city(),
                 command.latitude(),
                 command.longitude(),
-                makeDefault
+                command.defaultAddress()
         );
 
         customerRepository.save(customer);
@@ -69,25 +63,16 @@ public class ManageAddressUseCaseImpl implements ManageAddressUseCase {
         Customer customer = customerRepository.findByUserId(command.userId())
                 .orElseThrow(() -> new NotFoundException("Customer profile not found"));
 
-        Address address = customer.getAddresses().stream()
-                .filter(a -> a.getId().equals(command.addressId()) && !a.isDeleted())
-                .findFirst()
-                .orElseThrow(() -> new NotFoundException("Address not found with id: " + command.addressId()));
-
-        address.update(
+        Address address = customer.updateAddress(
+                command.addressId(),
                 command.label(),
                 command.addressLine(),
                 command.district(),
                 command.city(),
                 command.latitude(),
-                command.longitude()
+                command.longitude(),
+                command.defaultAddress()
         );
-
-        if (command.defaultAddress()) {
-            customer.setDefaultAddress(command.addressId());
-        } else {
-            address.unsetDefault();
-        }
 
         customerRepository.save(customer);
 
@@ -100,13 +85,11 @@ public class ManageAddressUseCaseImpl implements ManageAddressUseCase {
         Customer customer = customerRepository.findByUserId(command.userId())
                 .orElseThrow(() -> new NotFoundException("Customer profile not found"));
 
-        boolean exists = customer.getAddresses().stream()
-                .anyMatch(a -> a.getId().equals(command.addressId()) && !a.isDeleted());
-        if (!exists) {
+        try {
+            customer.removeAddress(command.addressId());
+        } catch (com.fooddelivery.customer.domain.exception.AddressNotFoundException ex) {
             throw new NotFoundException("Address not found with id: " + command.addressId());
         }
-
-        customer.removeAddress(command.addressId());
         customerRepository.save(customer);
     }
 

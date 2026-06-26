@@ -16,6 +16,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.UUID;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -43,6 +45,12 @@ class RegisterCustomerUseCaseTests {
                 outboxEventRepository,
                 passwordEncoder,
                 objectMapper);
+    }
+
+    private void setPrivateField(Object target, String fieldName, Object value) throws Exception {
+        java.lang.reflect.Field field = target.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(target, value);
     }
 
     @Test
@@ -77,7 +85,8 @@ class RegisterCustomerUseCaseTests {
     }
 
     @Test
-    void register_ShouldCreateUserWithCustomerRoleOnly() {
+    void register_ShouldCreateUserWithCustomerRoleOnly() throws Exception {
+        UUID userId = com.github.f4b6a3.uuid.UuidCreator.getTimeOrderedEpoch();
         RegisterCustomerCommand command = new RegisterCustomerCommand(
                 "new@gmail.com",
                 "0987654321",
@@ -88,7 +97,11 @@ class RegisterCustomerUseCaseTests {
         when(userRepository.existsByEmail(any())).thenReturn(false);
         when(userRepository.existsByPhone(any())).thenReturn(false);
         when(passwordEncoder.encode(any())).thenReturn("hashed_password");
-        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            setPrivateField(user, "id", userId);
+            return user;
+        });
         when(customerRepository.save(any(Customer.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         useCase.execute(command);

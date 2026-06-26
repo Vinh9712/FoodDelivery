@@ -6,6 +6,7 @@ import com.fooddelivery.customer.application.command.UpdateProfileCommand;
 import com.fooddelivery.customer.api.dto.response.CustomerProfileResponse;
 import com.fooddelivery.customer.application.usecase.UpdateProfileUseCase;
 import com.fooddelivery.customer.domain.model.Customer;
+import com.fooddelivery.customer.domain.model.User;
 import com.fooddelivery.customer.domain.repository.CustomerRepository;
 import com.fooddelivery.customer.infrastructure.persistence.OutboxEventRepository;
 import com.fooddelivery.customer.infrastructure.persistence.model.OutboxEvent;
@@ -43,6 +44,8 @@ public class UpdateProfileUseCaseImpl implements UpdateProfileUseCase {
     public CustomerProfileResponse execute(UpdateProfileCommand command) {
         Customer customer = customerRepository.findByUserId(command.userId())
                 .orElseThrow(() -> new BusinessRuleException("Customer profile not found"));
+        User user = userRepository.findById(command.userId())
+                .orElseThrow(() -> new BusinessRuleException("User not found"));
 
         String newPhone = (command.phone() != null && !command.phone().trim().isEmpty())
                 ? command.phone().trim()
@@ -51,8 +54,8 @@ public class UpdateProfileUseCaseImpl implements UpdateProfileUseCase {
             if (userRepository.existsByPhone(newPhone)) {
                 throw new BusinessRuleException("Phone number already in use");
             }
-            customer.getUser().updatePhone(newPhone);
-            userRepository.save(customer.getUser());
+            user.updatePhone(newPhone);
+            userRepository.save(user);
         }
 
         List<String> changedFields = new ArrayList<>();
@@ -81,7 +84,7 @@ public class UpdateProfileUseCaseImpl implements UpdateProfileUseCase {
                 String payload = objectMapper.writeValueAsString(event);
                 OutboxEvent outboxEvent = new OutboxEvent(
                         "Customer",
-                        customer.getUser().getId(),
+                        customer.getUserId(),
                         event.getEventType(),
                         payload
                 );
@@ -93,8 +96,8 @@ public class UpdateProfileUseCaseImpl implements UpdateProfileUseCase {
 
         return new CustomerProfileResponse(
                 customer.getId(),
-                customer.getUser().getId(),
-                customer.getUser().getEmail(),
+                user.getId(),
+                user.getEmail(),
                 customer.getPhone(),
                 customer.getFullName(),
                 customer.getAvatarUrl(),
@@ -108,11 +111,13 @@ public class UpdateProfileUseCaseImpl implements UpdateProfileUseCase {
     public CustomerProfileResponse getProfile(UUID userId) {
         Customer customer = customerRepository.findByUserId(userId)
                 .orElseThrow(() -> new BusinessRuleException("Customer profile not found"));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessRuleException("User not found"));
 
         return new CustomerProfileResponse(
                 customer.getId(),
-                customer.getUser().getId(),
-                customer.getUser().getEmail(),
+                user.getId(),
+                user.getEmail(),
                 customer.getPhone(),
                 customer.getFullName(),
                 customer.getAvatarUrl(),

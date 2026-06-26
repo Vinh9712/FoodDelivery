@@ -48,7 +48,7 @@ class UpdateProfileUseCaseTests {
     void updateProfile_ShouldFail_WhenPhoneAlreadyExists() {
         UUID userId = UuidCreator.getTimeOrderedEpoch();
         User user = User.register("test@gmail.com", "0987654321", "hashed", UserRole.CUSTOMER);
-        Customer customer = Customer.create(user, "Nguyen Van A", "0987654321");
+        Customer customer = Customer.create(userId, "Nguyen Van A", "0987654321");
 
         UpdateProfileCommand command = new UpdateProfileCommand(
                 userId,
@@ -58,6 +58,7 @@ class UpdateProfileUseCaseTests {
         );
 
         when(customerRepository.findByUserId(userId)).thenReturn(Optional.of(customer));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(userRepository.existsByPhone("0912345678")).thenReturn(true);
 
         assertThrows(BusinessRuleException.class, () -> useCase.execute(command));
@@ -69,7 +70,7 @@ class UpdateProfileUseCaseTests {
     void updateProfile_ShouldUpdateUserPhoneAndCustomerPhone_WhenPhoneIsUnique() {
         UUID userId = UuidCreator.getTimeOrderedEpoch();
         User user = User.register("test@gmail.com", "0987654321", "hashed", UserRole.CUSTOMER);
-        Customer customer = Customer.create(user, "Nguyen Van A", "0987654321");
+        Customer customer = Customer.create(userId, "Nguyen Van A", "0987654321");
 
         UpdateProfileCommand command = new UpdateProfileCommand(
                 userId,
@@ -79,6 +80,7 @@ class UpdateProfileUseCaseTests {
         );
 
         when(customerRepository.findByUserId(userId)).thenReturn(Optional.of(customer));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(userRepository.existsByPhone("0912345678")).thenReturn(false);
 
         useCase.execute(command);
@@ -95,7 +97,7 @@ class UpdateProfileUseCaseTests {
     void updateProfile_ShouldKeepExistingPhone_WhenPhoneIsOmitted() {
         UUID userId = UuidCreator.getTimeOrderedEpoch();
         User user = User.register("test@gmail.com", "0987654321", "hashed", UserRole.CUSTOMER);
-        Customer customer = Customer.create(user, "Nguyen Van A", "0987654321");
+        Customer customer = Customer.create(userId, "Nguyen Van A", "0987654321");
 
         UpdateProfileCommand command = new UpdateProfileCommand(
                 userId,
@@ -105,6 +107,7 @@ class UpdateProfileUseCaseTests {
         );
 
         when(customerRepository.findByUserId(userId)).thenReturn(Optional.of(customer));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         useCase.execute(command);
 

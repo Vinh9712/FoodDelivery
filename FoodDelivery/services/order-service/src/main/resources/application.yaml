@@ -1,6 +1,9 @@
 spring:
   application:
     name: order-service
+  threads:
+    virtual:
+      enabled: true  # Java 21 Virtual Threads — giúp Feign call đồng bộ không block OS thread
 
   # Pull shared/centralised config; 'optional:' => still boots if Config Server is down.
   # DataSource, JPA and Flyway are provided centrally by Config Server

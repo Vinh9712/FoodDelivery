@@ -5,9 +5,11 @@ package com.fooddelivery.delivery.domain.model.valueobject;
  */
 public enum DeliveryStatus {
     PENDING,
+    FINDING_DRIVER,
     DRIVER_ASSIGNED,
     PICKED_UP,
-    IN_TRANSIT,
+    DELIVERING,
     DELIVERED,
-    CANCELLED
+    CANCELLED,
+    FAILED
 }

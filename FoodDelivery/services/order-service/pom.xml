@@ -63,6 +63,12 @@
             <artifactId>spring-kafka</artifactId>
         </dependency>
 
+        <!-- OpenFeign — declarative HTTP client cho Saga Orchestrator -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+
         <!-- Flyway -->
         <dependency>
             <groupId>org.flywaydb</groupId>
@@ -107,6 +113,21 @@
             <artifactId>spring-kafka-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- WireMock — giả lập API responses cho integration test -->
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
+            <version>3.12.1</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- H2 — in-memory database cho integration test -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
