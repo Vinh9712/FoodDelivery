@@ -1,4 +1,30 @@
 # Restaurant Service – overrides on top of the shared application.yaml.
-# Add datasource / kafka here as the service grows.
 server:
   port: 8082
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/restaurant_db
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: ${SHOW_SQL:false}
+  flyway:
+    enabled: ${FLYWAY_ENABLED:false}
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.type.mapping: restaurant:com.fooddelivery.restaurant.event.RestaurantEvent, menu:com.fooddelivery.restaurant.event.MenuItemEvent
+
+logging:
+  level:
+    com.fooddelivery.restaurant: ${RESTAURANT_LOG_LEVEL:INFO}
+    org.springframework.kafka: ${KAFKA_LOG_LEVEL:INFO}

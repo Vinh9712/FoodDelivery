@@ -2,43 +2,5 @@ spring:
   application:
     name: restaurant-service
 
-  cloud:
-    config:
-      enabled: false
-
-  datasource:
-    url: jdbc:postgresql://localhost:5432/restaurant_db
-    username: postgres
-    password: 123
-    driver-class-name: org.postgresql.Driver
-
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-    show-sql: true
-
-  flyway:
-    enabled: false
-
-  kafka:
-    bootstrap-servers: localhost:9092
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-      properties:
-        spring.json.type.mapping: restaurant:com.fooddelivery.restaurant.event.RestaurantEvent, menu:com.fooddelivery.restaurant.event.MenuItemEvent
-
-server:
-  port: 8082
-
-eureka:
-  client:
-    enabled: false
-
-logging:
-  level:
-    com.fooddelivery.restaurant: DEBUG
-    org.springframework.kafka: DEBUG
+  config:
+    import: optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}
