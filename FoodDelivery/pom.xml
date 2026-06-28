@@ -20,6 +20,7 @@
 
     <modules>
         <module>services/notification-service</module>
+        <module>services/authentication-service</module>
         <module>services/customer-service</module>
         <module>services/delivery-service</module>
         <module>services/order-service</module>

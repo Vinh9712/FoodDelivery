@@ -31,6 +31,9 @@ public class Customer extends BaseEntity {
     @Column(name = "user_id", nullable = false, unique = true)
     private UUID userId;
 
+    @Column(name = "email", length = 255)
+    private String email;
+
     @Column(name = "full_name", nullable = false, length = 150)
     private String fullName;
 
@@ -59,15 +62,20 @@ public class Customer extends BaseEntity {
     }
 
     public static Customer create(UUID userId, String fullName, String phone) {
-        return create(userId, new FullName(fullName), phone != null ? new PhoneNumber(phone) : null);
+        return create(userId, null, fullName, phone);
     }
 
-    public static Customer create(UUID userId, FullName fullName, PhoneNumber phone) {
+    public static Customer create(UUID userId, String email, String fullName, String phone) {
+        return create(userId, email, new FullName(fullName), phone != null ? new PhoneNumber(phone) : null);
+    }
+
+    public static Customer create(UUID userId, String email, FullName fullName, PhoneNumber phone) {
         if (userId == null) {
             throw new IllegalArgumentException("userId is required");
         }
         Customer customer = new Customer();
         customer.userId = userId;
+        customer.email = email != null && !email.trim().isEmpty() ? email.trim().toLowerCase() : null;
         customer.fullName = fullName.value();
         customer.phone = phone != null ? phone.value() : null;
         customer.customerType = CustomerType.REGULAR;

@@ -6,6 +6,7 @@
 -- Flyway in each service then creates/migrates the schema inside its database.
 CREATE DATABASE food_order_db;
 CREATE DATABASE food_delivery_db;
+CREATE DATABASE auth_db;
 CREATE DATABASE user_db;
 CREATE DATABASE restaurant_db;
 CREATE DATABASE payment_db;

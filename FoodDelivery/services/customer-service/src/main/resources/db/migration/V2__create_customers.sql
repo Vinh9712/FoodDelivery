@@ -1,7 +1,8 @@
 -- V2: Create customers table
 CREATE TABLE customers (
     id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id         UUID         NOT NULL UNIQUE REFERENCES users (id),
+    user_id         UUID         NOT NULL UNIQUE,
+    email           VARCHAR(255),
     full_name       VARCHAR(150) NOT NULL,
     phone           VARCHAR(20),
     avatar_url      VARCHAR(500),

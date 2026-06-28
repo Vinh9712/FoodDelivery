@@ -6,12 +6,10 @@ import com.fooddelivery.customer.application.command.UpdateProfileCommand;
 import com.fooddelivery.customer.api.dto.response.CustomerProfileResponse;
 import com.fooddelivery.customer.application.usecase.UpdateProfileUseCase;
 import com.fooddelivery.customer.domain.model.Customer;
-import com.fooddelivery.customer.domain.model.User;
 import com.fooddelivery.customer.domain.repository.CustomerRepository;
 import com.fooddelivery.customer.infrastructure.persistence.OutboxEventRepository;
 import com.fooddelivery.customer.infrastructure.persistence.model.OutboxEvent;
 import com.fooddelivery.commonevents.CustomerUpdatedEvent;
-import com.fooddelivery.customer.domain.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,17 +22,14 @@ import java.util.UUID;
 public class UpdateProfileUseCaseImpl implements UpdateProfileUseCase {
 
     private final CustomerRepository customerRepository;
-    private final UserRepository userRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
 
     public UpdateProfileUseCaseImpl(
             CustomerRepository customerRepository,
-            UserRepository userRepository,
             OutboxEventRepository outboxEventRepository,
             ObjectMapper objectMapper) {
         this.customerRepository = customerRepository;
-        this.userRepository = userRepository;
         this.outboxEventRepository = outboxEventRepository;
         this.objectMapper = objectMapper;
     }
@@ -44,19 +39,10 @@ public class UpdateProfileUseCaseImpl implements UpdateProfileUseCase {
     public CustomerProfileResponse execute(UpdateProfileCommand command) {
         Customer customer = customerRepository.findByUserId(command.userId())
                 .orElseThrow(() -> new BusinessRuleException("Customer profile not found"));
-        User user = userRepository.findById(command.userId())
-                .orElseThrow(() -> new BusinessRuleException("User not found"));
 
         String newPhone = (command.phone() != null && !command.phone().trim().isEmpty())
                 ? command.phone().trim()
                 : customer.getPhone();
-        if (newPhone != null && !Objects.equals(customer.getPhone(), newPhone)) {
-            if (userRepository.existsByPhone(newPhone)) {
-                throw new BusinessRuleException("Phone number already in use");
-            }
-            user.updatePhone(newPhone);
-            userRepository.save(user);
-        }
 
         List<String> changedFields = new ArrayList<>();
         if (!Objects.equals(customer.getFullName(), command.fullName())) {
@@ -96,8 +82,8 @@ public class UpdateProfileUseCaseImpl implements UpdateProfileUseCase {
 
         return new CustomerProfileResponse(
                 customer.getId(),
-                user.getId(),
-                user.getEmail(),
+                customer.getUserId(),
+                customer.getEmail(),
                 customer.getPhone(),
                 customer.getFullName(),
                 customer.getAvatarUrl(),
@@ -111,13 +97,11 @@ public class UpdateProfileUseCaseImpl implements UpdateProfileUseCase {
     public CustomerProfileResponse getProfile(UUID userId) {
         Customer customer = customerRepository.findByUserId(userId)
                 .orElseThrow(() -> new BusinessRuleException("Customer profile not found"));
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new BusinessRuleException("User not found"));
 
         return new CustomerProfileResponse(
                 customer.getId(),
-                user.getId(),
-                user.getEmail(),
+                customer.getUserId(),
+                customer.getEmail(),
                 customer.getPhone(),
                 customer.getFullName(),
                 customer.getAvatarUrl(),

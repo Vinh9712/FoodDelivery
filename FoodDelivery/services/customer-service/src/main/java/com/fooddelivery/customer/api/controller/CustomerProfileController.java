@@ -11,10 +11,8 @@ import com.fooddelivery.customer.application.command.UpdateAddressCommand;
 import com.fooddelivery.customer.application.command.UpdateProfileCommand;
 import com.fooddelivery.customer.application.usecase.ManageAddressUseCase;
 import com.fooddelivery.customer.application.usecase.UpdateProfileUseCase;
-import com.fooddelivery.customer.config.UserPrincipal;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -36,17 +34,17 @@ public class CustomerProfileController {
 
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<CustomerProfileResponse>> getMyProfile(
-            @AuthenticationPrincipal UserPrincipal principal) {
-        CustomerProfileResponse response = updateProfileUseCase.getProfile(principal.userId());
+            @RequestHeader("X-User-Id") UUID userId) {
+        CustomerProfileResponse response = updateProfileUseCase.getProfile(userId);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
     @PutMapping("/me")
     public ResponseEntity<ApiResponse<CustomerProfileResponse>> updateMyProfile(
-            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestHeader("X-User-Id") UUID userId,
             @Valid @RequestBody UpdateProfileRequest request) {
         UpdateProfileCommand command = new UpdateProfileCommand(
-                principal.userId(),
+                userId,
                 request.fullName(),
                 request.phone(),
                 request.avatarUrl()
@@ -57,17 +55,17 @@ public class CustomerProfileController {
 
     @GetMapping("/me/addresses")
     public ResponseEntity<ApiResponse<List<AddressResponse>>> getMyAddresses(
-            @AuthenticationPrincipal UserPrincipal principal) {
-        List<AddressResponse> response = manageAddressUseCase.getAddresses(principal.userId());
+            @RequestHeader("X-User-Id") UUID userId) {
+        List<AddressResponse> response = manageAddressUseCase.getAddresses(userId);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
     @PostMapping("/me/addresses")
     public ResponseEntity<ApiResponse<AddressResponse>> addMyAddress(
-            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestHeader("X-User-Id") UUID userId,
             @Valid @RequestBody AddAddressRequest request) {
         AddAddressCommand command = new AddAddressCommand(
-                principal.userId(),
+                userId,
                 request.label(),
                 request.addressLine(),
                 request.district(),
@@ -82,11 +80,11 @@ public class CustomerProfileController {
 
     @PutMapping("/me/addresses/{addressId}")
     public ResponseEntity<ApiResponse<AddressResponse>> updateMyAddress(
-            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestHeader("X-User-Id") UUID userId,
             @PathVariable UUID addressId,
             @Valid @RequestBody AddAddressRequest request) {
         UpdateAddressCommand command = new UpdateAddressCommand(
-                principal.userId(),
+                userId,
                 addressId,
                 request.label(),
                 request.addressLine(),
@@ -102,9 +100,9 @@ public class CustomerProfileController {
 
     @DeleteMapping("/me/addresses/{addressId}")
     public ResponseEntity<ApiResponse<Void>> deleteMyAddress(
-            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestHeader("X-User-Id") UUID userId,
             @PathVariable UUID addressId) {
-        RemoveAddressCommand command = new RemoveAddressCommand(principal.userId(), addressId);
+        RemoveAddressCommand command = new RemoveAddressCommand(userId, addressId);
         manageAddressUseCase.removeAddress(command);
         return ResponseEntity.ok(ApiResponse.ok(null, "Address deleted successfully"));
     }
