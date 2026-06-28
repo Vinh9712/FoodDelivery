@@ -9,7 +9,7 @@
 #
 # Ports (host:container):
 #   8080 api-gateway   8081 customer   8082 restaurant   8083 order
-#   8084 delivery      8085 payment    8086 notification
+#   8084 delivery      8085 payment    8086 notification 8087 authentication
 #   8761 eureka        8888 config-server
 #   5432 postgres      9092 kafka      8090 kafka-ui      8180 keycloak
 # =====================================================================
@@ -171,6 +171,32 @@ services:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
 
   # ── Business services ─────────────────────────────────────────────
+  authentication-service:
+    <<: *app-base
+    build:
+      <<: *maven-build
+      args:
+        MODULE: services/authentication-service
+    container_name: fd-authentication-service
+    depends_on:
+      <<: *infra-deps
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      <<: *discovery-env
+      KAFKA_BOOTSTRAP: kafka:9092
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "8087:8087"
+    healthcheck:
+      <<: *actuator-health
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8087/actuator/health || exit 1"]
+
   customer-service:
     <<: *app-base
     build:

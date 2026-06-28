@@ -12,10 +12,14 @@ spring:
               enabled: false
               lower-case-service-id: true
           routes:
+            - id: authentication-service
+              uri: lb://authentication-service
+              predicates:
+                - Path=/api/v1/auth/**,/api/v1/admin/**,/api/v1/sessions/**
             - id: customer-service
               uri: lb://customer-service
               predicates:
-                - Path=/api/v1/customers/**,/api/v1/auth/**,/api/v1/admin/**,/api/v1/sessions/**
+                - Path=/api/v1/customers/**
             - id: restaurant-service
               uri: lb://restaurant-service
               predicates:
@@ -52,13 +56,9 @@ spring:
                 allowed-headers: "*"
                 allow-credentials: true
                 max-age: 3600
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/fooddelivery}
-
 app:
+  jwt:
+    secret: ${JWT_SECRET:135791234567892468helloworldantisercet135791234567892468helloworldantisercet135791234567892468helloworldantisercet}
   security:
     public-paths:
       - /actuator/health/**
