@@ -5,32 +5,32 @@
 #   docker compose up --build
 #
 # Ports:
-#   8081  authentication-service
+#   8087  authentication-service
 #   5432  postgres
 #   9092  kafka
 #   8090  kafka-ui (optional)
 # =====================================================================
 
-name: fd-customer-dev
+name: fd-authenticator
 
 services:
   authentication-service:
     build:
       context: ../..
       dockerfile: services/authentication-service/Dockerfile
-    container_name: fd-dev-authentication-service
+    container_name: fd-authentication-service
     depends_on:
       postgres:
         condition: service_healthy
       kafka:
         condition: service_healthy
     ports:
-      - "${CUSTOMER_SERVICE_PORT:-8081}:8081"
+      - "${AUTHENTICATOR_SERVICE_PORT:-8087}:8087"
     environment:
       SPRING_PROFILES_ACTIVE: dev
       SPRING_CLOUD_CONFIG_ENABLED: "false"
       EUREKA_CLIENT_ENABLED: "false"
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/user_db
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/auth_db
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: root
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
