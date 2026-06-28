@@ -33,5 +33,14 @@ spring:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:135791234567892468helloworldantisercet135791234567892468helloworldantisercet135791234567892468helloworldantisercet}
+    secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus, refresh
+  endpoint:
+    refresh:
+      access: unrestricted

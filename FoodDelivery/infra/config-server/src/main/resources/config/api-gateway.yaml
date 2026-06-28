@@ -1,4 +1,4 @@
-# API Gateway â€“ route/security overrides on top of the shared application.yaml.
+# API Gateway – route/security overrides on top of the shared application.yaml.
 server:
   port: 8080
 
@@ -58,7 +58,7 @@ spring:
                 max-age: 3600
 app:
   jwt:
-    secret: ${JWT_SECRET:135791234567892468helloworldantisercet135791234567892468helloworldantisercet135791234567892468helloworldantisercet}
+    secret: ${JWT_SECRET}
   security:
     public-paths:
       - /actuator/health/**
@@ -71,9 +71,11 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info, gateway, metrics, prometheus
+        include: health, info, gateway, metrics, prometheus, refresh
   endpoint:
     gateway:
+      access: unrestricted
+    refresh:
       access: unrestricted
 
 logging:

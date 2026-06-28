@@ -1,0 +1,16 @@
+management:
+  endpoint:
+    health:
+      show-details: never
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:0.1}
+
+logging:
+  level:
+    root: WARN
+
+spring:
+  cloud:
+    bus:
+      enabled: true
