@@ -79,7 +79,12 @@ public class AuthenticationController {
             HttpServletRequest httpServletRequest) {
         String deviceInfo = httpServletRequest.getHeader("User-Agent");
         String ipAddress = realIPExtractor.extract(httpServletRequest);
-        loginRateLimiter.checkAllowed(request.email(), ipAddress);
+        try {
+            loginRateLimiter.checkAllowed(request.email(), ipAddress);
+        } catch (RuntimeException ex) {
+            auditLogger.record("LOGIN", "BLOCKED", null, null, request.email(), ipAddress);
+            throw ex;
+        }
         LoginCommand command = new LoginCommand(
                 request.email(),
                 request.password(),

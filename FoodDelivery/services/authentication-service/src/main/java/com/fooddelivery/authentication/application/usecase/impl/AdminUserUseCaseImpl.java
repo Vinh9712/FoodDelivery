@@ -80,7 +80,7 @@ public class AdminUserUseCaseImpl implements AdminUserUseCase {
         String passwordHash = passwordEncoder.encode(command.password());
         User user = User.register(command.email(), command.phone(), passwordHash, command.role());
         user = userRepository.save(user);
-        auditLogger.record("ADMIN_CREATE_USER", "SUCCESS", null, user.getId(), user.getEmail(), null);
+        auditLogger.record("ADMIN_CREATE_USER", "SUCCESS", command.currentUserId(), user.getId(), user.getEmail(), null);
 
         return AdminUserResponse.from(user);
     }
