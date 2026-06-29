@@ -27,6 +27,8 @@ x-app-base: &app-base
 
 x-discovery-env: &discovery-env
   CONFIG_SERVER_URI: http://config-server:8888
+  SPRING_CLOUD_CONFIG_USERNAME: ${CONFIG_SERVER_USERNAME}
+  SPRING_CLOUD_CONFIG_PASSWORD: ${CONFIG_SERVER_PASSWORD}
   EUREKA_URI: http://eureka-server:8761/eureka/
 
 x-infra-deps: &infra-deps
@@ -143,6 +145,16 @@ services:
     container_name: fd-config-server
     ports:
       - "8888:8888"
+    environment:
+      CONFIG_SERVER_PROFILE: ${CONFIG_SERVER_PROFILE:-native}
+      CONFIG_SERVER_USERNAME: ${CONFIG_SERVER_USERNAME}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
+      CONFIG_GIT_URI: ${CONFIG_GIT_URI:-}
+      CONFIG_GIT_LABEL: ${CONFIG_GIT_LABEL:-main}
+      CONFIG_GIT_SEARCH_PATHS: ${CONFIG_GIT_SEARCH_PATHS:-}
+      CONFIG_GIT_USERNAME: ${CONFIG_GIT_USERNAME:-}
+      CONFIG_GIT_PASSWORD: ${CONFIG_GIT_PASSWORD:-}
+      KAFKA_BOOTSTRAP: kafka:9092
     healthcheck:
       <<: *actuator-health
       test: ["CMD-SHELL", "curl -fsS http://localhost:8888/actuator/health || exit 1"]
@@ -160,6 +172,7 @@ services:
         condition: service_healthy
     environment:
       <<: *discovery-env
+      JWT_SECRET: ${JWT_SECRET}
       # NOTE: tokens minted via http://localhost:8180 carry that issuer; if you
       # call the gateway with such a token the issuer will not match this URL.
       # For pure dev you can disable auth with SPRING_PROFILES_ACTIVE=insecure.
@@ -170,7 +183,7 @@ services:
       <<: *actuator-health
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
 
-  # ── Business services ─────────────────────────────────────────────
+  # -- Business services -----------------------------------------------
   authentication-service:
     <<: *app-base
     build:
@@ -191,6 +204,7 @@ services:
       DB_PORT: "5432"
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
     ports:
       - "8087:8087"
     healthcheck:

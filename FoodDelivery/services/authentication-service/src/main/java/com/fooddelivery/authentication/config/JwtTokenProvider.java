@@ -5,6 +5,7 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import lombok.Getter;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
@@ -14,6 +15,7 @@ import java.util.UUID;
 import com.github.f4b6a3.uuid.UuidCreator;
 
 @Component
+@RefreshScope
 public class JwtTokenProvider {
 
     private final SecretKey key;
@@ -80,5 +82,4 @@ public class JwtTokenProvider {
         String sid = getClaimsFromToken(token).get("sid", String.class);
         return sid == null ? null : UUID.fromString(sid);
     }
-
 }
