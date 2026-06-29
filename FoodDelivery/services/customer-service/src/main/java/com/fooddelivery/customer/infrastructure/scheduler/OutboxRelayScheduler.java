@@ -3,6 +3,7 @@ package com.fooddelivery.customer.infrastructure.scheduler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fooddelivery.customer.infrastructure.persistence.OutboxEventRepository;
 import com.fooddelivery.customer.infrastructure.persistence.model.OutboxEvent;
+import com.fooddelivery.commonevents.EventContracts;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -59,7 +60,7 @@ public class OutboxRelayScheduler {
                                 String messageJson = constructMessageJson(event);
 
                                 // Synchronously send to Kafka for reliability
-                                kafkaTemplate.send("customer-events", event.getAggregateId().toString(), messageJson).get();
+                                kafkaTemplate.send(EventContracts.CUSTOMER_EVENTS_TOPIC, event.getAggregateId().toString(), messageJson).get();
 
                                 event.markPublished();
                                 outboxEventRepository.save(event);

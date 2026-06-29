@@ -17,11 +17,11 @@ public class CustomerUpdatedEvent extends BaseEvent {
     private String avatarUrl;
 
     public CustomerUpdatedEvent() {
-        super("customer.updated", 1);
+        super(EventContracts.CUSTOMER_UPDATED, 1);
     }
 
     public CustomerUpdatedEvent(UUID customerId, List<String> changedFields, String fullName, String phone, String avatarUrl) {
-        super("customer.updated", 1);
+        super(EventContracts.CUSTOMER_UPDATED, 1);
         this.customerId = customerId;
         this.changedFields = changedFields;
         this.fullName = fullName;

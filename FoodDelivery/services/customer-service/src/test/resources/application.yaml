@@ -1,0 +1,15 @@
+spring:
+  config:
+    import: ""
+  cloud:
+    bus:
+      enabled: false
+    config:
+      enabled: false
+  kafka:
+    listener:
+      auto-startup: false
+
+eureka:
+  client:
+    enabled: false

@@ -7,6 +7,7 @@ import com.fooddelivery.customer.api.dto.response.AddressResponse;
 import com.fooddelivery.customer.api.dto.response.CustomerProfileResponse;
 import com.fooddelivery.customer.application.command.AddAddressCommand;
 import com.fooddelivery.customer.application.command.RemoveAddressCommand;
+import com.fooddelivery.customer.application.command.SetDefaultAddressCommand;
 import com.fooddelivery.customer.application.command.UpdateAddressCommand;
 import com.fooddelivery.customer.application.command.UpdateProfileCommand;
 import com.fooddelivery.customer.application.usecase.ManageAddressUseCase;
@@ -105,5 +106,13 @@ public class CustomerProfileController {
         RemoveAddressCommand command = new RemoveAddressCommand(userId, addressId);
         manageAddressUseCase.removeAddress(command);
         return ResponseEntity.ok(ApiResponse.ok(null, "Address deleted successfully"));
+    }
+
+    @PatchMapping("/me/addresses/{addressId}/default")
+    public ResponseEntity<ApiResponse<AddressResponse>> setDefaultAddress(
+            @RequestHeader("X-User-Id") UUID userId,
+            @PathVariable UUID addressId) {
+        AddressResponse response = manageAddressUseCase.setDefaultAddress(new SetDefaultAddressCommand(userId, addressId));
+        return ResponseEntity.ok(ApiResponse.ok(response, "Default address updated successfully"));
     }
 }
