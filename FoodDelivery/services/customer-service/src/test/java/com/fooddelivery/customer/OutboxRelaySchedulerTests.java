@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fooddelivery.customer.infrastructure.persistence.OutboxEventRepository;
 import com.fooddelivery.customer.infrastructure.persistence.model.OutboxEvent;
 import com.fooddelivery.customer.infrastructure.scheduler.OutboxRelayScheduler;
+import com.fooddelivery.commonevents.EventContracts;
 import com.github.f4b6a3.uuid.UuidCreator;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -50,7 +51,7 @@ class OutboxRelaySchedulerTests {
     @Test
     void relay_ShouldPublishToKafkaAndMarkSuccess() throws Exception {
         UUID aggregateId = UuidCreator.getTimeOrderedEpoch();
-        OutboxEvent event = new OutboxEvent("Customer", aggregateId, "customer.created",
+        OutboxEvent event = new OutboxEvent("Customer", aggregateId, EventContracts.CUSTOMER_CREATED,
                 "{\"customerId\":\"" + aggregateId + "\"}");
 
         when(outboxEventRepository.findUnpublishedEventIds()).thenReturn(Collections.singletonList(event.getId()));
@@ -62,7 +63,7 @@ class OutboxRelaySchedulerTests {
 
         scheduler.relay();
 
-        verify(kafkaTemplate, times(1)).send(eq("customer-events"), eq(aggregateId.toString()), any());
+        verify(kafkaTemplate, times(1)).send(eq(EventContracts.CUSTOMER_EVENTS_TOPIC), eq(aggregateId.toString()), any());
         assertTrue(event.isPublished());
         verify(outboxEventRepository, times(1)).save(event);
     }
@@ -70,7 +71,7 @@ class OutboxRelaySchedulerTests {
     @Test
     void relay_ShouldRetryPublishing_WhenKafkaFails() throws Exception {
         UUID aggregateId = UuidCreator.getTimeOrderedEpoch();
-        OutboxEvent event = new OutboxEvent("Customer", aggregateId, "customer.created",
+        OutboxEvent event = new OutboxEvent("Customer", aggregateId, EventContracts.CUSTOMER_CREATED,
                 "{\"customerId\":\"" + aggregateId + "\"}");
 
         when(outboxEventRepository.findUnpublishedEventIds()).thenReturn(Collections.singletonList(event.getId()));

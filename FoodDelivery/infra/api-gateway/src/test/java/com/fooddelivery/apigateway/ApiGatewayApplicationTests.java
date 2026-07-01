@@ -19,7 +19,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SpringBootTest(properties = {
         "app.jwt.secret=135791234567892468helloworldantisercet135791234567892468helloworldantisercet",
-        "eureka.client.enabled=false"
+        "eureka.client.enabled=false",
+        "spring.cloud.bus.enabled=false",
+        "spring.cloud.config.enabled=false",
+        "spring.config.import="
 })
 class ApiGatewayApplicationTests {
 

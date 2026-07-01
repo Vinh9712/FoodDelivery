@@ -17,11 +17,11 @@ public class UserRegisteredEvent extends BaseEvent {
     private String role;
 
     public UserRegisteredEvent() {
-        super("user.registered", 1);
+        super(EventContracts.USER_REGISTERED, 1);
     }
 
     public UserRegisteredEvent(UUID userId, String email, String phone, String fullName, String role) {
-        super("user.registered", 1);
+        super(EventContracts.USER_REGISTERED, 1);
         this.userId = userId;
         this.email = email;
         this.phone = phone;

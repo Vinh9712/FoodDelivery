@@ -53,9 +53,10 @@ public class AdminUserController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<AdminUserResponse>> createUser(
-            @Valid @RequestBody CreateAdminUserRequest request) {
+            @Valid @RequestBody CreateAdminUserRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
         CreateAdminUserCommand command = new CreateAdminUserCommand(
-                request.email(), request.phone(), request.password(), request.role());
+                principal.userId(), request.email(), request.phone(), request.password(), request.role());
         AdminUserResponse response = adminUserUseCase.createUser(command);
         return ResponseEntity.ok(ApiResponse.ok(response, "User created"));
     }

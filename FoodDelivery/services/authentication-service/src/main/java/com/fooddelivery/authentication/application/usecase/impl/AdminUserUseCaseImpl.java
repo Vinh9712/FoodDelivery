@@ -9,6 +9,7 @@ import com.fooddelivery.authentication.application.command.CreateAdminUserComman
 import com.fooddelivery.authentication.application.command.GetUserDetailQuery;
 import com.fooddelivery.authentication.application.command.ListUsersQuery;
 import com.fooddelivery.authentication.application.command.ToggleUserActiveCommand;
+import com.fooddelivery.authentication.application.service.SecurityAuditLogger;
 import com.fooddelivery.authentication.application.usecase.AdminUserUseCase;
 import com.fooddelivery.authentication.domain.model.User;
 import com.fooddelivery.authentication.domain.model.enums.UserRole;
@@ -26,11 +27,14 @@ public class AdminUserUseCaseImpl implements AdminUserUseCase {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SecurityAuditLogger auditLogger;
 
     public AdminUserUseCaseImpl(UserRepository userRepository,
-                                PasswordEncoder passwordEncoder) {
+                                PasswordEncoder passwordEncoder,
+                                SecurityAuditLogger auditLogger) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.auditLogger = auditLogger;
     }
 
     @Override
@@ -76,6 +80,7 @@ public class AdminUserUseCaseImpl implements AdminUserUseCase {
         String passwordHash = passwordEncoder.encode(command.password());
         User user = User.register(command.email(), command.phone(), passwordHash, command.role());
         user = userRepository.save(user);
+        auditLogger.record("ADMIN_CREATE_USER", "SUCCESS", command.currentUserId(), user.getId(), user.getEmail(), null);
 
         return AdminUserResponse.from(user);
     }
@@ -96,6 +101,7 @@ public class AdminUserUseCaseImpl implements AdminUserUseCase {
 
         user.changeRole(command.newRole());
         userRepository.save(user);
+        auditLogger.record("ADMIN_CHANGE_ROLE", "SUCCESS", command.currentUserId(), user.getId(), user.getEmail(), null);
     }
 
     @Override
@@ -114,6 +120,12 @@ public class AdminUserUseCaseImpl implements AdminUserUseCase {
             user.deactivate();
         }
         userRepository.save(user);
+        auditLogger.record(command.activate() ? "ADMIN_ACTIVATE_USER" : "ADMIN_DEACTIVATE_USER",
+                "SUCCESS",
+                command.currentUserId(),
+                user.getId(),
+                user.getEmail(),
+                null);
     }
 
     @Override

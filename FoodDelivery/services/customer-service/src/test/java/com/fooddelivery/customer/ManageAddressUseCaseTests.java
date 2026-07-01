@@ -2,6 +2,7 @@ package com.fooddelivery.customer;
 
 import com.fooddelivery.customer.application.command.AddAddressCommand;
 import com.fooddelivery.customer.application.command.RemoveAddressCommand;
+import com.fooddelivery.customer.application.command.SetDefaultAddressCommand;
 import com.fooddelivery.customer.api.dto.response.AddressResponse;
 import com.fooddelivery.customer.application.usecase.impl.ManageAddressUseCaseImpl;
 import com.fooddelivery.customer.domain.model.Address;
@@ -94,5 +95,26 @@ class ManageAddressUseCaseTests {
         assertTrue(addr.isDeleted());
         assertNotNull(addr.getDeletedAt());
         assertFalse(addr.isDefaultAddress());
+    }
+
+    @Test
+    void setDefaultAddress_ShouldUnsetPreviousDefault() throws Exception {
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        Customer customer = Customer.create(userId, "Nguyen Van A", "0987654321");
+        Address home = customer.addAddress("Home", "123 Street", "Dist 1", "HCM", null, null, true);
+        Address work = customer.addAddress("Work", "456 Blvd", "Dist 3", "HCM", null, null, false);
+        UUID homeId = UuidCreator.getTimeOrderedEpoch();
+        UUID workId = UuidCreator.getTimeOrderedEpoch();
+        setPrivateField(home, "id", homeId);
+        setPrivateField(work, "id", workId);
+
+        when(customerRepository.findByUserId(userId)).thenReturn(Optional.of(customer));
+
+        AddressResponse response = useCase.setDefaultAddress(new SetDefaultAddressCommand(userId, workId));
+
+        assertEquals(workId, response.id());
+        assertTrue(work.isDefaultAddress());
+        assertFalse(home.isDefaultAddress());
+        verify(customerRepository).save(customer);
     }
 }

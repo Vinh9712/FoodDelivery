@@ -17,11 +17,11 @@ public class CustomerRegisteredEvent extends BaseEvent {
     private String role;
 
     public CustomerRegisteredEvent() {
-        super("customer.created", 1);
+        super(EventContracts.CUSTOMER_CREATED, 1);
     }
 
     public CustomerRegisteredEvent(UUID customerId, UUID userId, String email, String phone, String fullName, String role) {
-        super("customer.created", 1);
+        super(EventContracts.CUSTOMER_CREATED, 1);
         this.customerId = customerId;
         this.userId = userId;
         this.email = email;

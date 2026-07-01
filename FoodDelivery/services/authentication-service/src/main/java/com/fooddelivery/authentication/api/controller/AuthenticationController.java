@@ -10,6 +10,8 @@ import com.fooddelivery.authentication.application.command.LoginCommand;
 import com.fooddelivery.authentication.application.command.LogoutCommand;
 import com.fooddelivery.authentication.application.command.RefreshTokenCommand;
 import com.fooddelivery.authentication.application.command.RegisterCustomerCommand;
+import com.fooddelivery.authentication.application.service.LoginRateLimiter;
+import com.fooddelivery.authentication.application.service.SecurityAuditLogger;
 import com.fooddelivery.authentication.utils.RealIPExtractor;
 import com.fooddelivery.authentication.application.usecase.LoginUseCase;
 import com.fooddelivery.authentication.application.usecase.LogoutUseCase;
@@ -30,30 +32,45 @@ public class AuthenticationController {
     private final RefreshTokenUseCase refreshTokenUseCase;
     private final LogoutUseCase logoutUseCase;
     private final RealIPExtractor realIPExtractor;
+    private final LoginRateLimiter loginRateLimiter;
+    private final SecurityAuditLogger auditLogger;
 
     public AuthenticationController(
             RegisterCustomerUseCase registerCustomerUseCase,
             LoginUseCase loginUseCase,
             RefreshTokenUseCase refreshTokenUseCase,
             LogoutUseCase logoutUseCase,
-            RealIPExtractor realIPExtractor) {
+            RealIPExtractor realIPExtractor,
+            LoginRateLimiter loginRateLimiter,
+            SecurityAuditLogger auditLogger) {
         this.registerCustomerUseCase = registerCustomerUseCase;
         this.loginUseCase = loginUseCase;
         this.refreshTokenUseCase = refreshTokenUseCase;
         this.logoutUseCase = logoutUseCase;
         this.realIPExtractor = realIPExtractor;
+        this.loginRateLimiter = loginRateLimiter;
+        this.auditLogger = auditLogger;
     }
 
     @PostMapping("/register")
-    public ResponseEntity<ApiResponse<UserRegistrationResponse>> register(@Valid @RequestBody RegisterRequest request) {
+    public ResponseEntity<ApiResponse<UserRegistrationResponse>> register(
+            @Valid @RequestBody RegisterRequest request,
+            HttpServletRequest httpServletRequest) {
         RegisterCustomerCommand command = new RegisterCustomerCommand(
                 request.email(),
                 request.phone(),
                 request.password(),
                 request.fullName(),
                 UserRole.CUSTOMER);
-        UserRegistrationResponse response = registerCustomerUseCase.execute(command);
-        return ResponseEntity.ok(ApiResponse.ok(response, "Registration successful"));
+        String ipAddress = realIPExtractor.extract(httpServletRequest);
+        try {
+            UserRegistrationResponse response = registerCustomerUseCase.execute(command);
+            auditLogger.record("REGISTER", "SUCCESS", null, response.userId(), response.email(), ipAddress);
+            return ResponseEntity.ok(ApiResponse.ok(response, "Registration successful"));
+        } catch (RuntimeException ex) {
+            auditLogger.record("REGISTER", "FAILURE", null, null, request.email(), ipAddress);
+            throw ex;
+        }
     }
 
     @PostMapping("/login")
@@ -62,13 +79,27 @@ public class AuthenticationController {
             HttpServletRequest httpServletRequest) {
         String deviceInfo = httpServletRequest.getHeader("User-Agent");
         String ipAddress = realIPExtractor.extract(httpServletRequest);
+        try {
+            loginRateLimiter.checkAllowed(request.email(), ipAddress);
+        } catch (RuntimeException ex) {
+            auditLogger.record("LOGIN", "BLOCKED", null, null, request.email(), ipAddress);
+            throw ex;
+        }
         LoginCommand command = new LoginCommand(
                 request.email(),
                 request.password(),
                 deviceInfo,
                 ipAddress);
-        AuthResponse response = loginUseCase.execute(command);
-        return ResponseEntity.ok(ApiResponse.ok(response, "Login successful"));
+        try {
+            AuthResponse response = loginUseCase.execute(command);
+            loginRateLimiter.reset(request.email(), ipAddress);
+            auditLogger.record("LOGIN", "SUCCESS", null, null, request.email(), ipAddress);
+            return ResponseEntity.ok(ApiResponse.ok(response, "Login successful"));
+        } catch (RuntimeException ex) {
+            loginRateLimiter.recordFailure(request.email(), ipAddress);
+            auditLogger.record("LOGIN", "FAILURE", null, null, request.email(), ipAddress);
+            throw ex;
+        }
     }
 
     @PostMapping("/refresh")
@@ -81,14 +112,23 @@ public class AuthenticationController {
                 request.refreshToken(),
                 deviceInfo,
                 ipAddress);
-        AuthResponse response = refreshTokenUseCase.execute(command);
-        return ResponseEntity.ok(ApiResponse.ok(response, "Token refreshed"));
+        try {
+            AuthResponse response = refreshTokenUseCase.execute(command);
+            auditLogger.record("REFRESH_TOKEN", "SUCCESS", null, null, null, ipAddress);
+            return ResponseEntity.ok(ApiResponse.ok(response, "Token refreshed"));
+        } catch (RuntimeException ex) {
+            auditLogger.record("REFRESH_TOKEN", "FAILURE", null, null, null, ipAddress);
+            throw ex;
+        }
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<ApiResponse<Void>> logout(@Valid @RequestBody RefreshTokenRequest request) {
+    public ResponseEntity<ApiResponse<Void>> logout(
+            @Valid @RequestBody RefreshTokenRequest request,
+            HttpServletRequest httpServletRequest) {
         LogoutCommand command = new LogoutCommand(request.refreshToken());
         logoutUseCase.execute(command);
+        auditLogger.record("LOGOUT", "SUCCESS", null, null, null, realIPExtractor.extract(httpServletRequest));
         return ResponseEntity.ok(ApiResponse.ok(null, "Logout successful"));
     }
 }

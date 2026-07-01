@@ -3,6 +3,7 @@ package com.fooddelivery.customer.application.usecase.impl;
 import com.fooddelivery.commonweb.exception.NotFoundException;
 import com.fooddelivery.customer.application.command.AddAddressCommand;
 import com.fooddelivery.customer.application.command.RemoveAddressCommand;
+import com.fooddelivery.customer.application.command.SetDefaultAddressCommand;
 import com.fooddelivery.customer.application.command.UpdateAddressCommand;
 import com.fooddelivery.customer.api.dto.response.AddressResponse;
 import com.fooddelivery.customer.application.usecase.ManageAddressUseCase;
@@ -77,6 +78,22 @@ public class ManageAddressUseCaseImpl implements ManageAddressUseCase {
         customerRepository.save(customer);
 
         return mapToResponse(address);
+    }
+
+    @Override
+    @Transactional
+    public AddressResponse setDefaultAddress(SetDefaultAddressCommand command) {
+        Customer customer = customerRepository.findByUserId(command.userId())
+                .orElseThrow(() -> new NotFoundException("Customer profile not found"));
+
+        try {
+            customer.setDefaultAddress(command.addressId());
+        } catch (com.fooddelivery.customer.domain.exception.AddressNotFoundException ex) {
+            throw new NotFoundException("Address not found with id: " + command.addressId());
+        }
+        customerRepository.save(customer);
+
+        return mapToResponse(customer.findActiveAddress(command.addressId()));
     }
 
     @Override

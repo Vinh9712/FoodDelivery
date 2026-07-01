@@ -1,0 +1,15 @@
+spring:
+  profiles:
+    active: native
+  cloud:
+    bus:
+      enabled: false
+    config:
+      enabled: false
+      server:
+        native:
+          search-locations: classpath:/config
+
+eureka:
+  client:
+    enabled: false

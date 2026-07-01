@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fooddelivery.customer.domain.model.Customer;
 import com.fooddelivery.customer.domain.repository.CustomerRepository;
+import com.fooddelivery.commonevents.EventContracts;
 import com.fooddelivery.commonevents.UserRegisteredEvent;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -20,11 +21,11 @@ public class UserRegisteredEventListener {
         this.customerRepository = customerRepository;
     }
 
-    @KafkaListener(topics = "auth-events", groupId = "customer-service")
+    @KafkaListener(topics = EventContracts.AUTH_EVENTS_TOPIC, groupId = "customer-service")
     @Transactional
     public void handle(String message) throws Exception {
         JsonNode envelope = objectMapper.readTree(message);
-        if (!"user.registered".equals(envelope.path("eventType").asText())) {
+        if (!EventContracts.USER_REGISTERED.equals(envelope.path("eventType").asText())) {
             return;
         }
 
