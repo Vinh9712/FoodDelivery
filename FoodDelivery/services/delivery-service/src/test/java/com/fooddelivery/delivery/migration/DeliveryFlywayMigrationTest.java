@@ -38,11 +38,18 @@ class DeliveryFlywayMigrationTest {
     void upgradesExistingDeliverySchemaThroughLifecycleMigrations() throws Exception {
         migrateTo("4");
         migrateTo("5");
+        assertThat(flyway().info().current().getVersion().getVersion()).isEqualTo("5");
         assertThat(columnExists("deliveries", "version")).isTrue();
         assertThat(indexExists("uq_deliveries_active_driver")).isTrue();
+        assertThat(indexExists("idx_drivers_assignment_candidates")).isTrue();
 
         migrateTo("6");
+        assertThat(columnExists("outbox_events", "published_at")).isTrue();
+        assertThat(columnExists("outbox_events", "attempts")).isTrue();
         assertThat(columnExists("outbox_events", "next_attempt_at")).isTrue();
+        assertThat(columnExists("outbox_events", "last_error")).isTrue();
+        assertThat(columnExists("outbox_events", "dead_lettered")).isTrue();
+        assertThat(columnExists("outbox_events", "dead_lettered_at")).isTrue();
         assertThat(indexExists("idx_delivery_outbox_due")).isTrue();
 
         Flyway latest = flyway();
