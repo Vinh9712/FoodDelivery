@@ -47,3 +47,5 @@ build/
 !**/.env.example
 
 FOODDELIVERY_STRUCTURE.md
+.codebase-memory
+.codex
