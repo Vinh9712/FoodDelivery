@@ -2,6 +2,7 @@ package com.fooddelivery.notification.infrastructure.persistence;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -40,6 +41,7 @@ public class ProcessedEvent {
      * Composite primary key.
      */
     @Getter
+    @EqualsAndHashCode
     @NoArgsConstructor
     public static class ProcessedEventId implements Serializable {
         private UUID eventId;

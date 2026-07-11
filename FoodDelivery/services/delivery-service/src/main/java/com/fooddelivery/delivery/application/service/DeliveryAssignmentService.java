@@ -4,17 +4,22 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fooddelivery.delivery.domain.model.Delivery;
 import com.fooddelivery.delivery.domain.model.Driver;
+import com.fooddelivery.delivery.domain.model.valueobject.Address;
+import com.fooddelivery.delivery.domain.model.valueobject.DeliveryStatus;
+import com.fooddelivery.delivery.domain.model.valueobject.DriverStatus;
 import com.fooddelivery.delivery.infrastructure.persistence.OutboxEvent;
 import com.fooddelivery.delivery.infrastructure.repository.DeliveryRepository;
 import com.fooddelivery.delivery.infrastructure.repository.DriverRepository;
 import com.fooddelivery.delivery.infrastructure.repository.OutboxEventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -37,57 +42,84 @@ public class DeliveryAssignmentService {
     private final ObjectMapper objectMapper;
 
     /**
-     * Assign the nearest available driver to a delivery.
+     * Persist a delivery request and assign an available driver. Repeated calls for
+     * the same order return the existing assignment without creating another event.
      */
     @Transactional
-    public void assignDriver(UUID deliveryId, UUID driverId) {
-        Delivery delivery = deliveryRepository.findById(deliveryId)
-                .orElseThrow(() -> new RuntimeException("Delivery not found: " + deliveryId));
+    public AssignmentResult scheduleDelivery(UUID orderId, String deliveryAddressSnapshot) {
+        Objects.requireNonNull(orderId, "orderId is required");
 
-        Driver driver = driverRepository.findById(driverId)
-                .orElseThrow(() -> new RuntimeException("Driver not found: " + driverId));
+        Delivery delivery = deliveryRepository.findByOrderIdForUpdate(orderId)
+                .orElseGet(() -> createDelivery(orderId, deliveryAddressSnapshot));
 
-        // 1. Update delivery aggregate
-        delivery.assignDriver(driverId);
-        deliveryRepository.save(delivery);
+        if (delivery.getDriverId() != null) {
+            return AssignmentResult.assigned(delivery, "Driver assignment already exists");
+        }
+        if (delivery.getStatus() == DeliveryStatus.CANCELLED
+                || delivery.getStatus() == DeliveryStatus.FAILED) {
+            return AssignmentResult.unassigned(delivery, "Delivery is no longer assignable");
+        }
 
-        // 2. Mark driver as unavailable
-        driver.markUnavailable();
-        driverRepository.save(driver);
+        delivery.startFindingDriver();
+        List<Driver> candidates = driverRepository.findAssignmentCandidatesForUpdate(
+                DriverStatus.ACTIVE, PageRequest.of(0, 1));
+        if (candidates.isEmpty()) {
+            deliveryRepository.save(delivery);
+            log.warn("No available driver for order {}. Delivery {} remains FINDING_DRIVER.",
+                    orderId, delivery.getId());
+            return AssignmentResult.unassigned(delivery, "No available driver");
+        }
 
-        // 3. Build outbox event with full driver snapshot payload
-        String payload = buildDriverAssignedPayload(delivery, driver);
-        OutboxEvent outboxEvent = new OutboxEvent(
-                "Delivery",
-                delivery.getId(),
-                "driver.assigned",
-                payload
-        );
-        outboxEventRepository.save(outboxEvent);
-
-        log.info("Driver {} assigned to delivery {} for order {}",
-                driverId, deliveryId, delivery.getOrderId());
+        Driver driver = candidates.getFirst();
+        assignAndRecord(delivery, driver);
+        return AssignmentResult.assigned(delivery, "Driver assigned successfully");
     }
 
     /**
-     * Auto-assign the nearest available driver for a newly created delivery.
+     * Assign a selected driver to a delivery.
      */
     @Transactional
-    public void autoAssignDriver(UUID orderId) {
-        // Create delivery for this order
-        Delivery delivery = new Delivery(orderId);
-        deliveryRepository.save(delivery);
+    public void assignDriver(UUID deliveryId, UUID driverId) {
+        Delivery delivery = deliveryRepository.findByIdForUpdate(deliveryId)
+                .orElseThrow(() -> new RuntimeException("Delivery not found: " + deliveryId));
 
-        // Find an available driver (simplified — in production: nearest by GPS)
-        List<Driver> availableDrivers = driverRepository.findByAvailableTrue();
-        if (availableDrivers.isEmpty()) {
-            log.warn("No available drivers for order {}. Delivery {} remains PENDING.",
-                    orderId, delivery.getId());
+        if (driverId.equals(delivery.getDriverId())) {
             return;
         }
 
-        Driver selectedDriver = availableDrivers.getFirst();
-        assignDriver(delivery.getId(), selectedDriver.getId());
+        Driver driver = driverRepository.findByIdForUpdate(driverId)
+                .orElseThrow(() -> new RuntimeException("Driver not found: " + driverId));
+        assignAndRecord(delivery, driver);
+    }
+
+    /**
+     * Auto-assign an available driver for a newly created delivery.
+     */
+    @Transactional
+    public void autoAssignDriver(UUID orderId) {
+        scheduleDelivery(orderId, null);
+    }
+
+    private Delivery createDelivery(UUID orderId, String deliveryAddressSnapshot) {
+        Address dropoffAddress = deliveryAddressSnapshot == null
+                ? null
+                : new Address(deliveryAddressSnapshot, null, null);
+        Delivery delivery = new Delivery(orderId, null, dropoffAddress, null);
+        return deliveryRepository.save(delivery);
+    }
+
+    private void assignAndRecord(Delivery delivery, Driver driver) {
+        driver.reserveForDelivery();
+        delivery.assignDriver(driver.getId());
+        deliveryRepository.save(delivery);
+        driverRepository.save(driver);
+
+        String payload = buildDriverAssignedPayload(delivery, driver);
+        outboxEventRepository.save(new OutboxEvent(
+                "Delivery", delivery.getId(), "driver.assigned", payload));
+
+        log.info("Driver {} assigned to delivery {} for order {}",
+                driver.getId(), delivery.getId(), delivery.getOrderId());
     }
 
     private String buildDriverAssignedPayload(Delivery delivery, Driver driver) {
@@ -110,6 +142,25 @@ public class DeliveryAssignmentService {
             return objectMapper.writeValueAsString(root);
         } catch (Exception e) {
             throw new RuntimeException("Failed to serialize driver.assigned payload", e);
+        }
+    }
+
+    public record AssignmentResult(
+            UUID orderId,
+            UUID deliveryId,
+            DeliveryStatus deliveryStatus,
+            UUID driverId,
+            boolean assigned,
+            String message
+    ) {
+        private static AssignmentResult assigned(Delivery delivery, String message) {
+            return new AssignmentResult(delivery.getOrderId(), delivery.getId(), delivery.getStatus(),
+                    delivery.getDriverId(), true, message);
+        }
+
+        private static AssignmentResult unassigned(Delivery delivery, String message) {
+            return new AssignmentResult(delivery.getOrderId(), delivery.getId(), delivery.getStatus(),
+                    null, false, message);
         }
     }
 }

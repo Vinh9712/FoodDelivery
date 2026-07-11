@@ -2,6 +2,15 @@
 server:
   port: 8086
 
+app:
+  notification:
+    dispatch:
+      enabled: ${NOTIFICATION_DISPATCH_ENABLED:true}
+      poll-delay: ${NOTIFICATION_DISPATCH_POLL_DELAY:2s}
+      retry-base-delay: ${NOTIFICATION_RETRY_BASE_DELAY:5s}
+      retry-max-delay: ${NOTIFICATION_RETRY_MAX_DELAY:10m}
+      max-attempts: ${NOTIFICATION_MAX_ATTEMPTS:5}
+
 spring:
   kafka:
     consumer:

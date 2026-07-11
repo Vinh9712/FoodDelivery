@@ -1,15 +1,19 @@
 package com.fooddelivery.notification.infrastructure.messaging;
 
-import com.fooddelivery.notification.application.NotificationStore;
+import com.fooddelivery.notification.api.dto.NotificationRequest;
+import com.fooddelivery.notification.application.NotificationJobService;
+import com.fooddelivery.notification.infrastructure.repository.ProcessedEventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
+import java.util.UUID;
 
 /**
- * Listens for order lifecycle events from Kafka and logs notifications.
+ * Listens for order lifecycle events and creates idempotent notification jobs.
  *
  * <p>Topics consumed:
  * <ul>
@@ -23,52 +27,70 @@ import java.util.Map;
 @Component
 @RequiredArgsConstructor
 @Slf4j
+@Transactional
 public class OrderEventListener {
 
-    private final NotificationStore store;
+    private static final String CONSUMER_NAME = "notification-service-order-events";
+
+    private final NotificationJobService notificationJobService;
+    private final ProcessedEventRepository processedEventRepository;
 
     @KafkaListener(topics = "order.placed", groupId = "notification-service")
     public void onOrderPlaced(Map<String, Object> event) {
-        String orderId = extractOrderId(event, "orderId");
-        String msg = "[Order Placed] New order placed - orderId: " + orderId;
-        log.info("[NOTIFICATION] {}", msg);
-        store.save("ORDER_PLACED", "order.placed", msg);
+        handle(event, "Order placed", "Your order has been received");
     }
 
     @KafkaListener(topics = "payment.processed", groupId = "notification-service")
     public void onPaymentProcessed(Map<String, Object> event) {
-        String orderId = extractOrderId(event, "orderId");
-        String msg = "[Payment Completed] Payment completed - orderId: " + orderId;
-        log.info("[NOTIFICATION] {}", msg);
-        store.save("PAYMENT_PROCESSED", "payment.processed", msg);
+        handle(event, "Payment completed", "Your payment was completed successfully");
     }
 
     @KafkaListener(topics = "payment.failed", groupId = "notification-service")
     public void onPaymentFailed(Map<String, Object> event) {
-        String orderId = extractOrderId(event, "orderId");
-        String msg = "[Payment Failed] Payment failed - orderId: " + orderId;
-        log.warn("[NOTIFICATION] {}", msg);
-        store.save("PAYMENT_FAILED", "payment.failed", msg);
+        handle(event, "Payment failed", "Your payment could not be completed");
     }
 
     @KafkaListener(topics = "driver.assigned", groupId = "notification-service")
     public void onDriverAssigned(Map<String, Object> event) {
-        String orderId = extractOrderId(event, "orderId");
-        String msg = "[Driver Assigned] Driver assigned - orderId: " + orderId;
-        log.info("[NOTIFICATION] {}", msg);
-        store.save("DRIVER_ASSIGNED", "driver.assigned", msg);
+        handle(event, "Driver assigned", "A driver has been assigned to your order");
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────
+    private void handle(Map<String, Object> event, String subject, String message) {
+        UUID eventId = extractUuid(event, "eventId", false);
+        if (eventId != null && processedEventRepository.existsByEventIdAndConsumer(eventId, CONSUMER_NAME)) {
+            return;
+        }
+
+        UUID orderId = extractUuid(event, "orderId", true);
+        UUID customerId = extractUuid(event, "customerId", true);
+        if (orderId != null && customerId != null) {
+            notificationJobService.enqueue(new NotificationRequest(
+                    orderId, customerId, "IN_APP", subject, message));
+            log.info("Persistent notification job queued: eventId={}, orderId={}, customerId={}",
+                    eventId, orderId, customerId);
+        } else {
+            log.warn("Notification event {} is missing orderId/customerId; no job created", eventId);
+        }
+
+        if (eventId != null) {
+            processedEventRepository.markProcessed(eventId, CONSUMER_NAME);
+        }
+    }
 
     @SuppressWarnings("unchecked")
-    private String extractOrderId(Map<String, Object> event, String field) {
+    private UUID extractUuid(Map<String, Object> event, String field, boolean fromPayload) {
         try {
-            Map<String, Object> payload = (Map<String, Object>) event.get("payload");
-            if (payload != null && payload.containsKey(field)) {
-                return payload.get(field).toString();
+            Object value;
+            if (fromPayload) {
+                Map<String, Object> payload = (Map<String, Object>) event.get("payload");
+                value = payload == null ? null : payload.get(field);
+            } else {
+                value = event.get(field);
             }
-        } catch (Exception ignored) {}
-        return "unknown";
+            return value == null ? null : UUID.fromString(value.toString());
+        } catch (RuntimeException ex) {
+            log.warn("Invalid UUID field {} in notification event", field);
+            return null;
+        }
     }
 }
