@@ -9,6 +9,14 @@ app:
     payment-reconciliation:
       enabled: true
       fixed-delay-ms: ${PAYMENT_RECONCILIATION_DELAY_MS:30000}
+    outbox:
+      relay:
+        enabled: ${ORDER_OUTBOX_RELAY_ENABLED:true}
+        poll-delay: ${ORDER_OUTBOX_POLL_DELAY:2s}
+        send-timeout: ${ORDER_OUTBOX_SEND_TIMEOUT:5s}
+        retry-base-delay: ${ORDER_OUTBOX_RETRY_BASE_DELAY:5s}
+        retry-max-delay: ${ORDER_OUTBOX_RETRY_MAX_DELAY:5m}
+        max-attempts: ${ORDER_OUTBOX_MAX_ATTEMPTS:10}
 
 spring:
   datasource:

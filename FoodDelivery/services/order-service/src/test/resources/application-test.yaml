@@ -68,6 +68,9 @@ app:
       delivery-fee: 15000
     payment-reconciliation:
       enabled: false
+    outbox:
+      relay:
+        enabled: false
 
 server:
   port: 0  # Random port cho test
