@@ -2,7 +2,7 @@ spring:
   application:
     name: payment-service
   config:
-    import: optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}
+    import: ""
   datasource:
     url: jdbc:h2:mem:payment_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
     driver-class-name: org.h2.Driver
@@ -17,6 +17,9 @@ spring:
         dialect: org.hibernate.dialect.H2Dialect
   flyway:
     enabled: false
+  kafka:
+    listener:
+      auto-startup: false
   cloud:
     config:
       enabled: false

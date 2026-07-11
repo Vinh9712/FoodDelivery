@@ -13,3 +13,7 @@ spring:
 eureka:
   client:
     enabled: false
+
+app:
+  internal:
+    gateway-secret: test-gateway-secret

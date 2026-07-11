@@ -38,3 +38,17 @@ spring:
   cloud:
     bus:
       enabled: true
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: ${FEIGN_CONNECT_TIMEOUT_MS:2000}
+            read-timeout: ${FEIGN_READ_TIMEOUT_MS:5000}
+
+app:
+  security:
+    jwt:
+      jwk-set-uri: ${AUTH_JWKS_URI:http://localhost:8087/.well-known/jwks.json}
+      issuer: ${JWT_ISSUER:food-delivery-auth}
+      audience: ${JWT_AUDIENCE:food-delivery-api}
+    internal-service-secret: ${INTERNAL_SERVICE_SECRET:}
