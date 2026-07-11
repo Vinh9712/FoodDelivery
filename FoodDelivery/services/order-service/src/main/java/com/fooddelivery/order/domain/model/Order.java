@@ -46,6 +46,13 @@ public class Order {
     @Column(name = "restaurant_id", nullable = false)
     private UUID restaurantId;
 
+    @Column(name = "client_request_id", length = 100)
+    private String clientRequestId;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private long version;
+
     /** Driver ID — null trước khi assign, set sau khi Delivery Service trả về */
     @Column(name = "driver_id")
     private UUID driverId;
@@ -127,10 +134,18 @@ public class Order {
     public static Order create(UUID customerId, UUID restaurantId,
                                String deliveryAddressJson,
                                BigDecimal deliveryFee, BigDecimal discountAmount) {
+        return create(customerId, restaurantId, deliveryAddressJson, deliveryFee, discountAmount, null);
+    }
+
+    public static Order create(UUID customerId, UUID restaurantId,
+                               String deliveryAddressJson,
+                               BigDecimal deliveryFee, BigDecimal discountAmount,
+                               String clientRequestId) {
         var order = new Order();
         order.id = UuidCreator.nextUuidV7();
         order.customerId = Objects.requireNonNull(customerId, "customerId must not be null");
         order.restaurantId = Objects.requireNonNull(restaurantId, "restaurantId must not be null");
+        order.clientRequestId = clientRequestId;
         order.status = OrderStatus.PENDING;
 
         // Parse JSON thành DeliveryAddressSnapshot — lưu nguyên chuỗi vào addressLine

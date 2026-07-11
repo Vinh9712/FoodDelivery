@@ -27,6 +27,7 @@
         <module>services/payment-service</module>
         <module>services/restaurant-service</module>
         <module>shared/common-events</module>
+        <module>shared/common-security</module>
         <module>shared/common-web</module>
         <module>shared/common-repo</module>
         <module>infra/eureka-server</module>
@@ -57,7 +58,7 @@
             </dependency>
 
             <dependency>
-                <groupId>com.talenthub</groupId>
+                <groupId>com.fooddelivery</groupId>
                 <artifactId>common-web</artifactId>
                 <version>${project.version}</version>
             </dependency>

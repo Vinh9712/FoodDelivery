@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.UUID;
 
 public interface ManageAddressUseCase {
-    List<AddressResponse> getAddresses(UUID userId);
+    List<AddressResponse> getAddresses(UUID authUserId);
     AddressResponse addAddress(AddAddressCommand command);
     AddressResponse updateAddress(UpdateAddressCommand command);
     AddressResponse setDefaultAddress(SetDefaultAddressCommand command);

@@ -7,11 +7,14 @@ import com.fooddelivery.order.domain.exception.OrderNotFoundException;
 import com.fooddelivery.order.domain.model.Order;
 import com.fooddelivery.order.infrastructure.repository.OrderRepository;
 import com.fooddelivery.order.saga.OrderSagaOrchestrator;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -37,31 +40,30 @@ public class OrderController {
     /**
      * Tạo đơn hàng mới và thực thi Saga đặt hàng.
      *
-     * @param request chứa thông tin đơn hàng (customerId, restaurantId, items, address, ...)
+     * @param request chỉ chứa restaurant, địa chỉ và menu item ID/số lượng; danh tính và giá do server xác định
      * @return OrderResponse với trạng thái cuối cùng sau khi saga hoàn tất
      */
     @PostMapping
-    public ResponseEntity<OrderResponse> createOrder(@RequestBody CreateOrderRequest request) {
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<OrderResponse> createOrder(
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @Valid @RequestBody CreateOrderRequest request,
+            Authentication authentication) {
+        UUID customerId = UUID.fromString(authentication.getName());
         log.info("📥 Nhận yêu cầu tạo đơn hàng: customerId={}, restaurantId={}",
-                request.customerId(), request.restaurantId());
+                customerId, request.restaurantId());
 
-        // Map input items sang format mà Saga Orchestrator cần
-        var sagaItems = request.items() != null
-                ? request.items().stream()
-                    .map(item -> new OrderSagaOrchestrator.OrderItemInput(
-                            item.menuItemId(), item.itemName(), item.description(),
-                            item.unitPrice(), item.quantity()))
-                    .toList()
-                : java.util.List.<OrderSagaOrchestrator.OrderItemInput>of();
+        var requestedItems = request.items().stream()
+                .map(item -> new OrderSagaOrchestrator.RequestedItem(item.menuItemId(), item.quantity()))
+                .toList();
 
         // Kích hoạt Saga
         Order order = sagaOrchestrator.placeOrder(
-                request.customerId(),
+                customerId,
                 request.restaurantId(),
                 request.deliveryAddress(),
-                request.deliveryFee(),
-                request.discountAmount(),
-                sagaItems
+                idempotencyKey,
+                requestedItems
         );
 
         log.info("✅ Saga hoàn tất: orderId={}, status={}", order.getId(), order.getStatus());
@@ -72,9 +74,11 @@ public class OrderController {
      * Get order details by ID, including assigned driver snapshot if available.
      */
     @GetMapping("/{id}")
+    @PreAuthorize("@orderAuthorization.canRead(#id, authentication)")
     public ResponseEntity<OrderResponse> getOrder(@PathVariable UUID id) {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new OrderNotFoundException(id));
         return ResponseEntity.ok(orderMapper.toResponse(order));
     }
+
 }

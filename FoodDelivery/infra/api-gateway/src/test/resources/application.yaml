@@ -12,7 +12,11 @@ eureka:
     enabled: false
 
 app:
-  jwt:
-    secret: test-secret-135791234567892468helloworldantisercet
+  internal:
+    gateway-secret: test-gateway-secret
   security:
     public-paths: /actuator/**
+    jwt:
+      jwk-set-uri: http://localhost:65535/.well-known/jwks.json
+      issuer: food-delivery-auth
+      audience: food-delivery-api

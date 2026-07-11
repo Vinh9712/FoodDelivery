@@ -14,6 +14,8 @@ import com.fooddelivery.authentication.application.usecase.AdminUserUseCase;
 import com.fooddelivery.authentication.domain.model.User;
 import com.fooddelivery.authentication.domain.model.enums.UserRole;
 import com.fooddelivery.authentication.domain.repository.UserRepository;
+import com.fooddelivery.authentication.domain.repository.RefreshTokenRepository;
+import com.fooddelivery.authentication.domain.repository.UserSessionRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,13 +30,19 @@ public class AdminUserUseCaseImpl implements AdminUserUseCase {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final SecurityAuditLogger auditLogger;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final UserSessionRepository userSessionRepository;
 
     public AdminUserUseCaseImpl(UserRepository userRepository,
                                 PasswordEncoder passwordEncoder,
-                                SecurityAuditLogger auditLogger) {
+                                SecurityAuditLogger auditLogger,
+                                RefreshTokenRepository refreshTokenRepository,
+                                UserSessionRepository userSessionRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.auditLogger = auditLogger;
+        this.refreshTokenRepository = refreshTokenRepository;
+        this.userSessionRepository = userSessionRepository;
     }
 
     @Override
@@ -101,6 +109,7 @@ public class AdminUserUseCaseImpl implements AdminUserUseCase {
 
         user.changeRole(command.newRole());
         userRepository.save(user);
+        revokeUserSessions(user);
         auditLogger.record("ADMIN_CHANGE_ROLE", "SUCCESS", command.currentUserId(), user.getId(), user.getEmail(), null);
     }
 
@@ -118,6 +127,7 @@ public class AdminUserUseCaseImpl implements AdminUserUseCase {
             user.activate();
         } else {
             user.deactivate();
+            revokeUserSessions(user);
         }
         userRepository.save(user);
         auditLogger.record(command.activate() ? "ADMIN_ACTIVATE_USER" : "ADMIN_DEACTIVATE_USER",
@@ -143,5 +153,13 @@ public class AdminUserUseCaseImpl implements AdminUserUseCase {
         }
 
         return new DashboardStatsResponse(totalUsers, activeUsers, usersByRole);
+    }
+
+    private void revokeUserSessions(User user) {
+        refreshTokenRepository.revokeAllByUserId(user.getId());
+        userSessionRepository.findAllByUserId(user.getId()).forEach(session -> {
+            session.softDelete();
+            userSessionRepository.save(session);
+        });
     }
 }

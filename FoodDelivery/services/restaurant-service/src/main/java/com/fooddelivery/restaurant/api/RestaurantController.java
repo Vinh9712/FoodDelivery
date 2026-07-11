@@ -10,6 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -25,8 +27,18 @@ public class RestaurantController {
     private final RestaurantService restaurantService;
 
     @PostMapping
-    public ResponseEntity<RestaurantResponse> createRestaurant(@Valid @RequestBody RestaurantRequest request) {
+    @PreAuthorize("hasAnyRole('RESTAURANT_OWNER', 'ADMIN')")
+    public ResponseEntity<RestaurantResponse> createRestaurant(
+            @Valid @RequestBody RestaurantRequest request,
+            Authentication authentication) {
         log.info("POST /api/v1/restaurants - Create restaurant");
+        if (isAdmin(authentication) && request.getOwnerId() == null) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Owner ID is required for admin-created restaurants");
+        }
+        if (!isAdmin(authentication)) {
+            request.setOwnerId(UUID.fromString(authentication.getName()));
+        }
         RestaurantResponse response = restaurantService.createRestaurant(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -46,6 +58,7 @@ public class RestaurantController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("@restaurantAuthorization.canManageRestaurant(#id, authentication)")
     public ResponseEntity<RestaurantResponse> updateRestaurant(
             @PathVariable("id") UUID id,
             @Valid @RequestBody RestaurantRequest request) {
@@ -55,6 +68,7 @@ public class RestaurantController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("@restaurantAuthorization.canManageRestaurant(#id, authentication)")
     public ResponseEntity<Void> deleteRestaurant(@PathVariable("id") UUID id) {
         log.info("DELETE /api/v1/restaurants/{} - Delete restaurant", id);
         restaurantService.deleteRestaurant(id);
@@ -92,6 +106,11 @@ public class RestaurantController {
 
         Page<RestaurantResponse> responses = restaurantService.searchRestaurants(request);
         return ResponseEntity.ok(responses);
+    }
+
+    private boolean isAdmin(Authentication authentication) {
+        return authentication.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN"));
     }
 
 }

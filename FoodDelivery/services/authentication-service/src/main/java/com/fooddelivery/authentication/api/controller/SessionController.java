@@ -48,7 +48,7 @@ public class SessionController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Void>> revokeOthers(
             @AuthenticationPrincipal UserPrincipal principal) {
-        RevokeOthersCommand command = new RevokeOthersCommand(principal.userId());
+        RevokeOthersCommand command = new RevokeOthersCommand(principal.userId(), principal.sessionId());
         sessionUseCase.revokeOthers(command);
         return ResponseEntity.ok(ApiResponse.ok(null, "Other sessions revoked"));
     }

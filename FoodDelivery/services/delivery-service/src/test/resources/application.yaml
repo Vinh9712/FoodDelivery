@@ -2,7 +2,15 @@ spring:
   application:
     name: delivery-service
   config:
-    import: optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}
+    import: ""
+  cloud:
+    config:
+      enabled: false
+    discovery:
+      enabled: false
+  kafka:
+    listener:
+      auto-startup: false
   datasource:
     url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
     driver-class-name: org.h2.Driver
@@ -13,4 +21,8 @@ spring:
     hibernate:
       ddl-auto: create-drop
   flyway:
+    enabled: false
+
+eureka:
+  client:
     enabled: false

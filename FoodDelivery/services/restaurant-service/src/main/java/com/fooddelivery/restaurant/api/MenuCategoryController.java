@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,6 +23,7 @@ public class MenuCategoryController {
     private final MenuCategoryService menuCategoryService;
 
     @PostMapping("/restaurants/{restaurantId}/categories")
+    @PreAuthorize("@restaurantAuthorization.canManageRestaurant(#restaurantId, authentication)")
     public ResponseEntity<MenuCategoryResponse> createCategory(
             @PathVariable("restaurantId") UUID restaurantId,
             @Valid @RequestBody MenuCategoryRequest request) {
@@ -47,6 +49,7 @@ public class MenuCategoryController {
     }
 
     @PutMapping("/categories/{categoryId}")
+    @PreAuthorize("@restaurantAuthorization.canManageCategory(#categoryId, authentication)")
     public ResponseEntity<MenuCategoryResponse> updateCategory(
             @PathVariable("categoryId") UUID categoryId,
             @Valid @RequestBody MenuCategoryRequest request) {
@@ -56,6 +59,7 @@ public class MenuCategoryController {
     }
 
     @DeleteMapping("/categories/{categoryId}")
+    @PreAuthorize("@restaurantAuthorization.canManageCategory(#categoryId, authentication)")
     public ResponseEntity<Void> deleteCategory(
             @PathVariable("categoryId") UUID categoryId) {
         log.info("DELETE /categories/{} - Delete category", categoryId);

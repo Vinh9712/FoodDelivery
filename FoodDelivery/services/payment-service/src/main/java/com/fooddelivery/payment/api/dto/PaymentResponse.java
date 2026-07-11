@@ -7,7 +7,7 @@ import java.util.UUID;
  */
 public record PaymentResponse(
         UUID orderId,
-        String status,       // "SUCCESS" hoặc "FAILED"
+        String status,       // SUCCESS, FAILED, PROCESSING hoặc REFUNDED
         String transactionId, // Mã giao dịch (null nếu thất bại)
         String message        // Thông báo chi tiết
 ) {}

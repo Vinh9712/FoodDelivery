@@ -33,8 +33,12 @@ spring:
 
 app:
   jwt:
-    secret: ${JWT_SECRET}
-    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+    issuer: ${JWT_ISSUER:food-delivery-auth}
+    audience: ${JWT_AUDIENCE:food-delivery-api}
+    key-id: ${JWT_KEY_ID:food-delivery-auth-1}
+    private-key-base64: ${JWT_PRIVATE_KEY_BASE64:}
+    public-key-base64: ${JWT_PUBLIC_KEY_BASE64:}
+    expiration-ms: ${JWT_EXPIRATION_MS:900000}
 
 management:
   endpoints:

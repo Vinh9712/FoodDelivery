@@ -1,31 +1,30 @@
 package com.fooddelivery.order.saga;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fooddelivery.order.domain.model.Order;
 import com.fooddelivery.order.domain.model.OutboxEvent;
+import com.fooddelivery.order.domain.exception.InvalidOrderRequestException;
+import com.fooddelivery.order.domain.exception.OrderDependencyException;
 import com.fooddelivery.order.domain.model.valueobject.OrderStatus;
 import com.fooddelivery.order.infrastructure.repository.OrderRepository;
 import com.fooddelivery.order.infrastructure.repository.OutboxEventRepository;
 import com.github.tomakehurst.wiremock.WireMockServer;
-import com.github.tomakehurst.wiremock.client.WireMock;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Kiểm thử tích hợp đầu cuối cho Saga Orchestrator.
  * <p>
- * Sử dụng WireMock để giả lập Payment, Delivery, Notification Service.
+ * Sử dụng WireMock để giả lập Restaurant, Payment, Delivery, Notification Service.
  * H2 in-memory database cho Order DB (profile "test").
  * </p>
  *
@@ -45,10 +44,12 @@ class OrderSagaIntegrationTest {
     private static final int PAYMENT_PORT = 18082;
     private static final int DELIVERY_PORT = 18083;
     private static final int NOTIFICATION_PORT = 18084;
+    private static final int RESTAURANT_PORT = 18085;
 
     private static WireMockServer paymentServer;
     private static WireMockServer deliveryServer;
     private static WireMockServer notificationServer;
+    private static WireMockServer restaurantServer;
 
     @Autowired
     private OrderSagaOrchestrator sagaOrchestrator;
@@ -59,18 +60,17 @@ class OrderSagaIntegrationTest {
     @Autowired
     private OutboxEventRepository outboxEventRepository;
 
-    @Autowired
-    private ObjectMapper objectMapper;
-
     @BeforeAll
     static void startWireMockServers() {
         paymentServer = new WireMockServer(wireMockConfig().port(PAYMENT_PORT));
         deliveryServer = new WireMockServer(wireMockConfig().port(DELIVERY_PORT));
         notificationServer = new WireMockServer(wireMockConfig().port(NOTIFICATION_PORT));
+        restaurantServer = new WireMockServer(wireMockConfig().port(RESTAURANT_PORT));
 
         paymentServer.start();
         deliveryServer.start();
         notificationServer.start();
+        restaurantServer.start();
     }
 
     @AfterAll
@@ -78,6 +78,7 @@ class OrderSagaIntegrationTest {
         paymentServer.stop();
         deliveryServer.stop();
         notificationServer.stop();
+        restaurantServer.stop();
     }
 
     @BeforeEach
@@ -85,10 +86,11 @@ class OrderSagaIntegrationTest {
         paymentServer.resetAll();
         deliveryServer.resetAll();
         notificationServer.resetAll();
+        restaurantServer.resetAll();
 
         // Notification luôn trả về thành công (fire-and-forget)
         notificationServer.stubFor(
-                post(urlEqualTo("/api/notifications"))
+                post(urlEqualTo("/internal/v1/notifications"))
                         .willReturn(aResponse()
                                 .withStatus(200)
                                 .withHeader("Content-Type", "application/json")
@@ -114,7 +116,7 @@ class OrderSagaIntegrationTest {
         var expectedDriverId = UUID.randomUUID();
 
         paymentServer.stubFor(
-                post(urlEqualTo("/api/payments"))
+                post(urlEqualTo("/internal/v1/payments"))
                         .willReturn(aResponse()
                                 .withStatus(200)
                                 .withHeader("Content-Type", "application/json")
@@ -129,7 +131,7 @@ class OrderSagaIntegrationTest {
 
         // Giả lập Delivery trả về ASSIGNED kèm driverId
         deliveryServer.stubFor(
-                post(urlEqualTo("/api/deliveries"))
+                post(urlEqualTo("/internal/v1/deliveries"))
                         .willReturn(aResponse()
                                 .withStatus(200)
                                 .withHeader("Content-Type", "application/json")
@@ -142,21 +144,48 @@ class OrderSagaIntegrationTest {
                                         }
                                         """.formatted(expectedDriverId))));
 
-        // ── Act: Thực thi Saga ──
+        var restaurantId = UUID.randomUUID();
+        var phoId = UUID.randomUUID();
+        var teaId = UUID.randomUUID();
+        restaurantServer.stubFor(
+                post(urlEqualTo("/internal/v1/restaurants/" + restaurantId + "/menu/quote"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "application/json")
+                                .withBody("""
+                                        {
+                                          "restaurantId": "%s",
+                                          "subtotal": 160000,
+                                          "items": [
+                                            {
+                                              "menuItemId": "%s",
+                                              "itemName": "Phở Bò Tái",
+                                              "description": "Phở bò truyền thống",
+                                              "unitPrice": 75000,
+                                              "quantity": 2,
+                                              "lineTotal": 150000
+                                            },
+                                            {
+                                              "menuItemId": "%s",
+                                              "itemName": "Trà Đá",
+                                              "description": null,
+                                              "unitPrice": 5000,
+                                              "quantity": 2,
+                                              "lineTotal": 10000
+                                            }
+                                          ]
+                                        }
+                                        """.formatted(restaurantId, phoId, teaId))));
+
+        // ── Act: Chỉ gửi ID và số lượng; mọi giá trị tiền đến từ server ──
         var items = List.of(
-                new OrderSagaOrchestrator.OrderItemInput(
-                        UUID.randomUUID(), "Phở Bò Tái", "Phở bò truyền thống",
-                        new BigDecimal("75000"), 2),
-                new OrderSagaOrchestrator.OrderItemInput(
-                        UUID.randomUUID(), "Trà Đá", null,
-                        new BigDecimal("5000"), 2)
+                new OrderSagaOrchestrator.RequestedItem(phoId, 2),
+                new OrderSagaOrchestrator.RequestedItem(teaId, 2)
         );
 
         Order result = sagaOrchestrator.placeOrder(
-                UUID.randomUUID(), UUID.randomUUID(),
+                UUID.randomUUID(), restaurantId,
                 "123 Lê Lợi, Quận 1, TP.HCM",
-                new BigDecimal("15000"),  // phí giao
-                BigDecimal.ZERO,          // giảm giá
                 items
         );
 
@@ -181,12 +210,16 @@ class OrderSagaIntegrationTest {
         assertThat(events.stream().anyMatch(e -> "OrderCreated".equals(e.getEventType()))).isTrue();
 
         // 5. Verify Delivery Service đã được gọi
-        deliveryServer.verify(1, postRequestedFor(urlEqualTo("/api/deliveries")));
+        deliveryServer.verify(1, postRequestedFor(urlEqualTo("/internal/v1/deliveries")));
 
         // 6. Verify Notification Service đã được gọi
         notificationServer.verify(
                 com.github.tomakehurst.wiremock.client.WireMock.moreThanOrExactly(1),
-                postRequestedFor(urlEqualTo("/api/notifications")));
+                postRequestedFor(urlEqualTo("/internal/v1/notifications")));
+
+        // 7. Payment nhận subtotal từ restaurant-service + phí giao hàng do order-service cấu hình.
+        paymentServer.verify(1, postRequestedFor(urlEqualTo("/internal/v1/payments"))
+                .withRequestBody(matchingJsonPath("$.amount", equalTo("175000"))));
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -199,7 +232,7 @@ class OrderSagaIntegrationTest {
     void test_paymentFailed_orderCancelled() {
         // ── Arrange: Giả lập Payment trả về FAILED ──
         paymentServer.stubFor(
-                post(urlEqualTo("/api/payments"))
+                post(urlEqualTo("/internal/v1/payments"))
                         .willReturn(aResponse()
                                 .withStatus(200)
                                 .withHeader("Content-Type", "application/json")
@@ -212,18 +245,36 @@ class OrderSagaIntegrationTest {
                                         }
                                         """)));
 
-        // ── Act: Tạo đơn hàng với giá trị > 500k ──
+        var restaurantId = UUID.randomUUID();
+        var itemId = UUID.randomUUID();
+        restaurantServer.stubFor(
+                post(urlEqualTo("/internal/v1/restaurants/" + restaurantId + "/menu/quote"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "application/json")
+                                .withBody("""
+                                        {
+                                          "restaurantId": "%s",
+                                          "subtotal": 600000,
+                                          "items": [{
+                                            "menuItemId": "%s",
+                                            "itemName": "Bò Wagyu A5",
+                                            "description": "Bò Nhật cao cấp",
+                                            "unitPrice": 600000,
+                                            "quantity": 1,
+                                            "lineTotal": 600000
+                                          }]
+                                        }
+                                        """.formatted(restaurantId, itemId))));
+
+        // ── Act: Restaurant service quyết định giá trị đơn hàng > 500k ──
         var items = List.of(
-                new OrderSagaOrchestrator.OrderItemInput(
-                        UUID.randomUUID(), "Bò Wagyu A5", "Bò Nhật cao cấp",
-                        new BigDecimal("600000"), 1)
+                new OrderSagaOrchestrator.RequestedItem(itemId, 1)
         );
 
         Order result = sagaOrchestrator.placeOrder(
-                UUID.randomUUID(), UUID.randomUUID(),
+                UUID.randomUUID(), restaurantId,
                 "456 Nguyễn Huệ, Quận 1, TP.HCM",
-                new BigDecimal("20000"),
-                BigDecimal.ZERO,
                 items
         );
 
@@ -241,7 +292,7 @@ class OrderSagaIntegrationTest {
         )).isTrue();
 
         // 3. KHÔNG có cuộc gọi nào gửi tới Delivery Service
-        deliveryServer.verify(0, postRequestedFor(urlEqualTo("/api/deliveries")));
+        deliveryServer.verify(0, postRequestedFor(urlEqualTo("/internal/v1/deliveries")));
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -254,7 +305,7 @@ class OrderSagaIntegrationTest {
     void test_deliveryFailed_compensatingTransactionTriggered() {
         // ── Arrange: Payment thành công, Delivery thất bại ──
         paymentServer.stubFor(
-                post(urlEqualTo("/api/payments"))
+                post(urlEqualTo("/internal/v1/payments"))
                         .willReturn(aResponse()
                                 .withStatus(200)
                                 .withHeader("Content-Type", "application/json")
@@ -268,7 +319,7 @@ class OrderSagaIntegrationTest {
                                         """)));
 
         deliveryServer.stubFor(
-                post(urlEqualTo("/api/deliveries"))
+                post(urlEqualTo("/internal/v1/deliveries"))
                         .willReturn(aResponse()
                                 .withStatus(200)
                                 .withHeader("Content-Type", "application/json")
@@ -283,7 +334,7 @@ class OrderSagaIntegrationTest {
 
         // Giả lập Refund trả về REFUNDED
         paymentServer.stubFor(
-                post(urlEqualTo("/api/payments/refund"))
+                post(urlEqualTo("/internal/v1/payments/refund"))
                         .willReturn(aResponse()
                                 .withStatus(200)
                                 .withHeader("Content-Type", "application/json")
@@ -295,24 +346,42 @@ class OrderSagaIntegrationTest {
                                         }
                                         """)));
 
+        var restaurantId = UUID.randomUUID();
+        var itemId = UUID.randomUUID();
+        restaurantServer.stubFor(
+                post(urlEqualTo("/internal/v1/restaurants/" + restaurantId + "/menu/quote"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "application/json")
+                                .withBody("""
+                                        {
+                                          "restaurantId": "%s",
+                                          "subtotal": 45000,
+                                          "items": [{
+                                            "menuItemId": "%s",
+                                            "itemName": "Cơm Tấm",
+                                            "description": "Cơm tấm sườn bì chả",
+                                            "unitPrice": 45000,
+                                            "quantity": 1,
+                                            "lineTotal": 45000
+                                          }]
+                                        }
+                                        """.formatted(restaurantId, itemId))));
+
         // ── Act: Đơn hàng với địa chỉ chứa "Invalid" ──
         var items = List.of(
-                new OrderSagaOrchestrator.OrderItemInput(
-                        UUID.randomUUID(), "Cơm Tấm", "Cơm tấm sườn bì chả",
-                        new BigDecimal("45000"), 1)
+                new OrderSagaOrchestrator.RequestedItem(itemId, 1)
         );
 
         Order result = sagaOrchestrator.placeOrder(
-                UUID.randomUUID(), UUID.randomUUID(),
+                UUID.randomUUID(), restaurantId,
                 "789 Invalid Street, District X",  // Chứa "Invalid"
-                new BigDecimal("15000"),
-                BigDecimal.ZERO,
                 items
         );
 
         // ── Assert ──
         // 1. API hoàn tiền được gọi thành công
-        paymentServer.verify(1, postRequestedFor(urlEqualTo("/api/payments/refund")));
+        paymentServer.verify(1, postRequestedFor(urlEqualTo("/internal/v1/payments/refund")));
 
         // 2. Trạng thái cuối cùng là CANCELLED
         Order savedOrder = orderRepository.findWithHistoryById(result.getId()).orElseThrow();
@@ -329,6 +398,153 @@ class OrderSagaIntegrationTest {
         // 4. Notification đã được gửi (thông báo hủy + hoàn tiền)
         notificationServer.verify(
                 com.github.tomakehurst.wiremock.client.WireMock.moreThanOrExactly(1),
-                postRequestedFor(urlEqualTo("/api/notifications")));
+                postRequestedFor(urlEqualTo("/internal/v1/notifications")));
+    }
+
+    @Test
+    @org.junit.jupiter.api.Order(4)
+    @DisplayName("Inconsistent restaurant quote is rejected before order persistence and payment")
+    void test_inconsistentQuote_rejectedBeforeCreatingOrder() {
+        var restaurantId = UUID.randomUUID();
+        var itemId = UUID.randomUUID();
+        long ordersBefore = orderRepository.count();
+        restaurantServer.stubFor(
+                post(urlEqualTo("/internal/v1/restaurants/" + restaurantId + "/menu/quote"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "application/json")
+                                .withBody("""
+                                        {
+                                          "restaurantId": "%s",
+                                          "subtotal": 1,
+                                          "items": [{
+                                            "menuItemId": "%s",
+                                            "itemName": "Pho",
+                                            "description": null,
+                                            "unitPrice": 75000,
+                                            "quantity": 2,
+                                            "lineTotal": 150000
+                                          }]
+                                        }
+                                        """.formatted(restaurantId, itemId))));
+
+        assertThatThrownBy(() -> sagaOrchestrator.placeOrder(
+                UUID.randomUUID(), restaurantId, "123 Test Street",
+                List.of(new OrderSagaOrchestrator.RequestedItem(itemId, 2))))
+                .isInstanceOf(OrderDependencyException.class);
+
+        assertThat(orderRepository.count()).isEqualTo(ordersBefore);
+        paymentServer.verify(0, postRequestedFor(urlEqualTo("/internal/v1/payments")));
+    }
+
+    @Test
+    @org.junit.jupiter.api.Order(5)
+    @DisplayName("Restaurant business rejection becomes an invalid customer order")
+    void test_restaurantRejectsItems_mapsToInvalidOrder() {
+        var restaurantId = UUID.randomUUID();
+        var itemId = UUID.randomUUID();
+        long ordersBefore = orderRepository.count();
+        restaurantServer.stubFor(
+                post(urlEqualTo("/internal/v1/restaurants/" + restaurantId + "/menu/quote"))
+                        .willReturn(aResponse()
+                                .withStatus(400)
+                                .withHeader("Content-Type", "application/json")
+                                .withBody("{\"message\":\"Menu item is unavailable\"}")));
+
+        assertThatThrownBy(() -> sagaOrchestrator.placeOrder(
+                UUID.randomUUID(), restaurantId, "123 Test Street",
+                List.of(new OrderSagaOrchestrator.RequestedItem(itemId, 1))))
+                .isInstanceOf(InvalidOrderRequestException.class);
+
+        assertThat(orderRepository.count()).isEqualTo(ordersBefore);
+        paymentServer.verify(0, postRequestedFor(urlEqualTo("/internal/v1/payments")));
+    }
+
+    @Test
+    @org.junit.jupiter.api.Order(6)
+    @DisplayName("Client idempotency key returns the original order without charging twice")
+    void test_duplicateClientRequest_returnsOriginalOrder() {
+        var restaurantId = UUID.randomUUID();
+        var itemId = UUID.randomUUID();
+        var customerId = UUID.randomUUID();
+        var driverId = UUID.randomUUID();
+        var clientRequestId = "checkout-" + UUID.randomUUID();
+        stubSingleItemQuote(restaurantId, itemId, "50000");
+        paymentServer.stubFor(post(urlEqualTo("/internal/v1/payments"))
+                .willReturn(aResponse().withStatus(200).withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {"orderId":null,"status":"SUCCESS","transactionId":"TXN-IDEMPOTENT","message":"ok"}
+                                """)));
+        deliveryServer.stubFor(post(urlEqualTo("/internal/v1/deliveries"))
+                .willReturn(aResponse().withStatus(200).withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {"orderId":null,"status":"ASSIGNED","driverId":"%s","message":"ok"}
+                                """.formatted(driverId))));
+
+        var requestedItems = List.of(new OrderSagaOrchestrator.RequestedItem(itemId, 1));
+        Order first = sagaOrchestrator.placeOrder(
+                customerId, restaurantId, "Idempotent Street", clientRequestId, requestedItems);
+        Order replay = sagaOrchestrator.placeOrder(
+                customerId, restaurantId, "Tampered retry address", clientRequestId, requestedItems);
+
+        assertThat(replay.getId()).isEqualTo(first.getId());
+        assertThat(orderRepository.findByCustomerIdAndClientRequestId(customerId, clientRequestId)
+                .orElseThrow().getId()).isEqualTo(first.getId());
+        restaurantServer.verify(1, postRequestedFor(urlEqualTo(
+                "/internal/v1/restaurants/" + restaurantId + "/menu/quote")));
+        paymentServer.verify(1, postRequestedFor(urlEqualTo("/internal/v1/payments"))
+                .withHeader("Idempotency-Key", equalTo("order-payment:" + first.getId())));
+    }
+
+    @Test
+    @org.junit.jupiter.api.Order(7)
+    @DisplayName("Lost payment response is reconciled instead of cancelling a paid order")
+    void test_lostPaymentResponse_reconcilesPaymentStatus() {
+        var restaurantId = UUID.randomUUID();
+        var itemId = UUID.randomUUID();
+        var driverId = UUID.randomUUID();
+        stubSingleItemQuote(restaurantId, itemId, "50000");
+        paymentServer.stubFor(post(urlEqualTo("/internal/v1/payments"))
+                .willReturn(aResponse().withStatus(503)));
+        paymentServer.stubFor(get(urlMatching("/internal/v1/payments/orders/.*"))
+                .willReturn(aResponse().withStatus(200).withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {"orderId":null,"status":"SUCCESS","transactionId":"TXN-RECOVERED","message":"ok"}
+                                """)));
+        deliveryServer.stubFor(post(urlEqualTo("/internal/v1/deliveries"))
+                .willReturn(aResponse().withStatus(200).withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {"orderId":null,"status":"ASSIGNED","driverId":"%s","message":"ok"}
+                                """.formatted(driverId))));
+
+        Order result = sagaOrchestrator.placeOrder(
+                UUID.randomUUID(), restaurantId, "Recovery Street", "recover-" + UUID.randomUUID(),
+                List.of(new OrderSagaOrchestrator.RequestedItem(itemId, 1)));
+
+        assertThat(result.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+        paymentServer.verify(1, postRequestedFor(urlEqualTo("/internal/v1/payments")));
+        paymentServer.verify(1, getRequestedFor(urlMatching("/internal/v1/payments/orders/.*")));
+    }
+
+    private void stubSingleItemQuote(UUID restaurantId, UUID itemId, String price) {
+        restaurantServer.stubFor(
+                post(urlEqualTo("/internal/v1/restaurants/" + restaurantId + "/menu/quote"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "application/json")
+                                .withBody("""
+                                        {
+                                          "restaurantId": "%s",
+                                          "subtotal": %s,
+                                          "items": [{
+                                            "menuItemId": "%s",
+                                            "itemName": "Server Item",
+                                            "description": null,
+                                            "unitPrice": %s,
+                                            "quantity": 1,
+                                            "lineTotal": %s
+                                          }]
+                                        }
+                                        """.formatted(restaurantId, price, itemId, price, price))));
     }
 }

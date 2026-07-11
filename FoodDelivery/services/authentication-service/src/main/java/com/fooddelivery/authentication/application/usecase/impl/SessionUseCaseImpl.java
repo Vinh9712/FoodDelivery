@@ -54,11 +54,8 @@ public class SessionUseCaseImpl implements SessionUseCase {
     @Transactional
     public void revokeOthers(RevokeOthersCommand command) {
         List<UserSession> sessions = userSessionRepository.findAllByUserId(command.userId());
-        UserSession mostRecent = sessions.stream()
-                .max(java.util.Comparator.comparing(UserSession::getLastUsedAt))
-                .orElse(null);
         for (UserSession session : sessions) {
-            if (!session.getId().equals(mostRecent != null ? mostRecent.getId() : null)) {
+            if (!session.getId().equals(command.currentSessionId())) {
                 refreshTokenRepository.revokeAllBySessionId(session.getId());
                 session.softDelete();
                 userSessionRepository.save(session);

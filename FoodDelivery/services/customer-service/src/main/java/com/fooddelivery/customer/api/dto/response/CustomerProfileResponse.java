@@ -4,7 +4,7 @@ import java.util.UUID;
 
 public record CustomerProfileResponse(
     UUID id,
-    UUID userId,
+    UUID authUserId,
     String email,
     String phone,
     String fullName,

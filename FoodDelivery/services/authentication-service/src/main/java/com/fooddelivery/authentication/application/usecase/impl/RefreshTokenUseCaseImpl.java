@@ -8,6 +8,7 @@ import com.fooddelivery.authentication.application.usecase.RefreshTokenUseCase;
 import com.fooddelivery.authentication.config.JwtTokenProvider;
 import com.fooddelivery.authentication.domain.model.RefreshToken;
 import com.fooddelivery.authentication.domain.model.User;
+import com.fooddelivery.authentication.domain.model.UserSession;
 import com.fooddelivery.authentication.domain.repository.RefreshTokenRepository;
 import com.fooddelivery.authentication.domain.repository.UserSessionRepository;
 import com.fooddelivery.authentication.utils.SecurityUtils;
@@ -46,6 +47,7 @@ public class RefreshTokenUseCaseImpl implements RefreshTokenUseCase {
                 .orElseThrow(() -> new BusinessRuleException("Invalid or expired refresh token"));
 
         if (!oldToken.isActive()) {
+            revokeCompromisedSession(oldToken.getSessionId());
             throw new BusinessRuleException("Invalid or expired refresh token");
         }
 
@@ -59,10 +61,12 @@ public class RefreshTokenUseCaseImpl implements RefreshTokenUseCase {
 
         UUID sessionId = oldToken.getSessionId();
         if (sessionId != null) {
-            userSessionRepository.findById(sessionId).ifPresent(session -> {
-                session.markUsed(command.ipAddress());
-                userSessionRepository.save(session);
-            });
+            UserSession session = userSessionRepository.findById(sessionId)
+                    .filter(existing -> !existing.isDeleted())
+                    .filter(existing -> existing.getUser().getId().equals(user.getId()))
+                    .orElseThrow(() -> new BusinessRuleException("Session has been revoked"));
+            session.markUsed(command.ipAddress());
+            userSessionRepository.save(session);
         }
 
         String newAccessToken = jwtTokenProvider.generateAccessToken(
@@ -88,5 +92,16 @@ public class RefreshTokenUseCaseImpl implements RefreshTokenUseCase {
                 rawRefreshToken,
                 "Bearer",
                 jwtTokenProvider.getExpirationMs());
+    }
+
+    private void revokeCompromisedSession(UUID sessionId) {
+        if (sessionId == null) {
+            return;
+        }
+        refreshTokenRepository.revokeAllBySessionId(sessionId);
+        userSessionRepository.findById(sessionId).ifPresent(session -> {
+            session.softDelete();
+            userSessionRepository.save(session);
+        });
     }
 }

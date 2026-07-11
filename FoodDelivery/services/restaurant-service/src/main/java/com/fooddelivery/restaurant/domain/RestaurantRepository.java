@@ -15,6 +15,7 @@ import java.util.UUID;
 public interface RestaurantRepository extends JpaRepository<Restaurant, UUID> {
 
     List<Restaurant> findByOwnerId(UUID ownerId);
+    boolean existsByIdAndOwnerId(UUID id, UUID ownerId);
     @Query("SELECT r FROM Restaurant r WHERE " +
             "(:name IS NULL OR LOWER(CAST(r.name AS string)) LIKE LOWER(CONCAT('%', CAST(:name AS string), '%'))) AND " +
             "(:city IS NULL OR LOWER(CAST(r.city AS string)) LIKE LOWER(CONCAT('%', CAST(:city AS string), '%'))) AND " +

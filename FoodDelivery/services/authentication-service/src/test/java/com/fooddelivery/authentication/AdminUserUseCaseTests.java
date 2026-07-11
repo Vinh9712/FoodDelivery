@@ -6,6 +6,8 @@ import com.fooddelivery.authentication.application.usecase.impl.AdminUserUseCase
 import com.fooddelivery.authentication.domain.model.User;
 import com.fooddelivery.authentication.domain.model.enums.UserRole;
 import com.fooddelivery.authentication.domain.repository.UserRepository;
+import com.fooddelivery.authentication.domain.repository.RefreshTokenRepository;
+import com.fooddelivery.authentication.domain.repository.UserSessionRepository;
 import com.github.f4b6a3.uuid.UuidCreator;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -24,7 +26,14 @@ class AdminUserUseCaseTests {
         UserRepository userRepository = mock(UserRepository.class);
         PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
         SecurityAuditLogger auditLogger = mock(SecurityAuditLogger.class);
-        AdminUserUseCaseImpl useCase = new AdminUserUseCaseImpl(userRepository, passwordEncoder, auditLogger);
+        RefreshTokenRepository refreshTokenRepository = mock(RefreshTokenRepository.class);
+        UserSessionRepository userSessionRepository = mock(UserSessionRepository.class);
+        AdminUserUseCaseImpl useCase = new AdminUserUseCaseImpl(
+                userRepository,
+                passwordEncoder,
+                auditLogger,
+                refreshTokenRepository,
+                userSessionRepository);
         UUID actorId = UuidCreator.getTimeOrderedEpoch();
         UUID createdUserId = UuidCreator.getTimeOrderedEpoch();
 

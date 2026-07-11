@@ -186,7 +186,9 @@ class AuthenticationUseCaseTests {
 
         when(refreshTokenRepository.findByTokenHash(SecurityUtils.hashToken("old-refresh")))
                 .thenReturn(Optional.of(oldToken));
-        when(userSessionRepository.findById(sessionId)).thenReturn(Optional.empty());
+        UserSession session = UserSession.create(user, "Computer", "DESKTOP", "Chrome", "Windows", "127.0.0.1");
+        setPrivateField(session, "id", sessionId);
+        when(userSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
         when(jwtTokenProvider.generateAccessToken(user.getId(), "new@gmail.com", "CUSTOMER", sessionId))
                 .thenReturn("new-access");
         when(jwtTokenProvider.getExpirationMs()).thenReturn(900000L);
@@ -201,10 +203,58 @@ class AuthenticationUseCaseTests {
     @Test
     void logout_ShouldRevokeRefreshTokenHash() {
         LogoutUseCaseImpl useCase = new LogoutUseCaseImpl(refreshTokenRepository, userSessionRepository);
+        User user = user();
+        UUID sessionId = UuidCreator.getTimeOrderedEpoch();
+        RefreshToken token = RefreshToken.issue(
+                user,
+                SecurityUtils.hashToken("refresh"),
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                "ua",
+                "127.0.0.1",
+                sessionId);
+        UserSession session = UserSession.create(user, "Computer", "DESKTOP", "Chrome", "Windows", "127.0.0.1");
+        setPrivateField(session, "id", sessionId);
+        when(refreshTokenRepository.findByTokenHash(SecurityUtils.hashToken("refresh")))
+                .thenReturn(Optional.of(token));
+        when(userSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
 
         useCase.execute(new LogoutCommand("refresh"));
 
         verify(refreshTokenRepository).revokeByTokenHash(SecurityUtils.hashToken("refresh"));
+        verify(refreshTokenRepository).revokeAllBySessionId(sessionId);
+        verify(userSessionRepository).save(session);
+        assertTrue(session.isDeleted());
+    }
+
+    @Test
+    void refreshReuse_ShouldRevokeCompromisedSession() {
+        RefreshTokenUseCaseImpl useCase = new RefreshTokenUseCaseImpl(
+                refreshTokenRepository,
+                jwtTokenProvider,
+                userAgentParser,
+                userSessionRepository);
+        User user = user();
+        UUID sessionId = UuidCreator.getTimeOrderedEpoch();
+        RefreshToken reusedToken = RefreshToken.issue(
+                user,
+                SecurityUtils.hashToken("reused-refresh"),
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                "ua",
+                "127.0.0.1",
+                sessionId);
+        reusedToken.revoke();
+        UserSession session = UserSession.create(user, "Computer", "DESKTOP", "Chrome", "Windows", "127.0.0.1");
+        setPrivateField(session, "id", sessionId);
+        when(refreshTokenRepository.findByTokenHash(SecurityUtils.hashToken("reused-refresh")))
+                .thenReturn(Optional.of(reusedToken));
+        when(userSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+
+        assertThrows(BusinessRuleException.class, () -> useCase.execute(
+                new RefreshTokenCommand("reused-refresh", "ua", "127.0.0.2")));
+
+        verify(refreshTokenRepository).revokeAllBySessionId(sessionId);
+        verify(userSessionRepository).save(session);
+        assertTrue(session.isDeleted());
     }
 
     private User user() {

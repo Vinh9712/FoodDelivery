@@ -56,8 +56,7 @@ public class Payment {
     @Column(name = "failed_reason")
     private String failedReason;
 
-    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @JoinColumn(name = "payment_id")
+    @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<Refund> refunds = new ArrayList<>();
 
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -136,7 +135,7 @@ public class Payment {
             throw new RefundExceedsPaymentAmountException(this.id);
         }
         
-        Refund refund = Refund.create(this.id, refundAmount, reason);
+        Refund refund = Refund.create(this, refundAmount, reason);
         refunds.add(refund);
         
         this.status = PaymentStatus.REFUNDED;

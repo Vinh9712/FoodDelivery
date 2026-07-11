@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,6 +23,7 @@ public class MenuItemController {
     private final MenuItemService menuItemService;
 
     @PostMapping("/restaurants/{restaurantId}/items")
+    @PreAuthorize("@restaurantAuthorization.canManageRestaurant(#restaurantId, authentication)")
     public ResponseEntity<MenuItemResponse> createMenuItem(
             @PathVariable("restaurantId") UUID restaurantId,
             @Valid @RequestBody MenuItemRequest request) {
@@ -47,6 +49,7 @@ public class MenuItemController {
     }
 
     @PutMapping("/items/{itemId}")
+    @PreAuthorize("@restaurantAuthorization.canManageItem(#itemId, authentication)")
     public ResponseEntity<MenuItemResponse> updateMenuItem(
             @PathVariable("itemId") UUID itemId,
             @Valid @RequestBody MenuItemRequest request) {
@@ -56,6 +59,7 @@ public class MenuItemController {
     }
 
     @DeleteMapping("/items/{itemId}")
+    @PreAuthorize("@restaurantAuthorization.canManageItem(#itemId, authentication)")
     public ResponseEntity<Void> deleteMenuItem(
             @PathVariable("itemId") UUID itemId) {
         log.info("DELETE /items/{} - Delete menu item", itemId);
@@ -64,6 +68,7 @@ public class MenuItemController {
     }
 
     @PatchMapping("/items/{itemId}/availability")
+    @PreAuthorize("@restaurantAuthorization.canManageItem(#itemId, authentication)")
     public ResponseEntity<MenuItemResponse> updateAvailability(
             @PathVariable("itemId") UUID itemId,
             @RequestParam("isAvailable") Boolean isAvailable) {
