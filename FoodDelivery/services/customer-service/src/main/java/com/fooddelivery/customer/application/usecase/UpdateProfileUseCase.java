@@ -7,5 +7,5 @@ import java.util.UUID;
 
 public interface UpdateProfileUseCase {
     CustomerProfileResponse execute(UpdateProfileCommand command);
-    CustomerProfileResponse getProfile(UUID userId);
+    CustomerProfileResponse getProfile(UUID authUserId);
 }

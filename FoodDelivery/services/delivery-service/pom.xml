@@ -14,6 +14,11 @@
         <java.version>21</java.version>
     </properties>
     <dependencies>
+        <dependency>
+            <groupId>com.fooddelivery</groupId>
+            <artifactId>common-security</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <!-- Web & Actuator -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -21,6 +21,6 @@ public interface DeliveryServiceClient {
      * @param request chứa orderId, deliveryAddressSnapshot
      * @return kết quả phân bổ tài xế (ASSIGNED hoặc FAILED)
      */
-    @PostMapping("/api/deliveries")
+    @PostMapping("/internal/v1/deliveries")
     DeliveryResponse scheduleDelivery(@RequestBody DeliveryRequest request);
 }

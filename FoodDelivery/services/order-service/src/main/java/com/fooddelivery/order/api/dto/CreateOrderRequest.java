@@ -1,8 +1,12 @@
 package com.fooddelivery.order.api.dto;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
-import java.math.BigDecimal;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
 
@@ -11,36 +15,23 @@ import java.util.UUID;
  * Sử dụng Java 21 Record + nested record cho items.
  */
 public record CreateOrderRequest(
-        @NotNull(message = "Customer ID is required")
-        UUID customerId,
-
         @NotNull(message = "Restaurant ID is required")
         UUID restaurantId,
 
-        @NotNull(message = "Total amount is required")
-        @Positive(message = "Total amount must be positive")
-        BigDecimal totalAmount,
-
-        String currency,
+        @NotBlank(message = "Delivery address is required")
         String deliveryAddress,
-        BigDecimal deliveryFee,
-        BigDecimal discountAmount,
+
+        @NotEmpty(message = "At least one order item is required")
+        @Size(max = 50, message = "An order cannot contain more than 50 item entries")
+        @Valid
         List<OrderItemRequest> items
 ) {
-    /**
-     * Compact constructor: default currency to VND if not supplied.
-     * Một dòng hàng trong đơn đặt hàng.
-     */
-    public CreateOrderRequest {
-        if (currency == null || currency.isBlank()) {
-            currency = "VND";
-        }
-    }
     public record OrderItemRequest(
+            @NotNull(message = "Menu item ID is required")
             UUID menuItemId,
-            String itemName,
-            String description,
-            BigDecimal unitPrice,
+
+            @Positive(message = "Quantity must be positive")
+            @Max(value = 99, message = "Quantity cannot exceed 99")
             int quantity
     ) {}
 }

@@ -28,8 +28,8 @@ public class Customer extends BaseEntity {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
-    @Column(name = "user_id", nullable = false, unique = true)
-    private UUID userId;
+    @Column(name = "auth_user_id", nullable = false, unique = true)
+    private UUID authUserId;
 
     @Column(name = "email", length = 255)
     private String email;
@@ -61,20 +61,20 @@ public class Customer extends BaseEntity {
         }
     }
 
-    public static Customer create(UUID userId, String fullName, String phone) {
-        return create(userId, null, fullName, phone);
+    public static Customer create(UUID authUserId, String fullName, String phone) {
+        return create(authUserId, null, fullName, phone);
     }
 
-    public static Customer create(UUID userId, String email, String fullName, String phone) {
-        return create(userId, email, new FullName(fullName), phone != null ? new PhoneNumber(phone) : null);
+    public static Customer create(UUID authUserId, String email, String fullName, String phone) {
+        return create(authUserId, email, new FullName(fullName), phone != null ? new PhoneNumber(phone) : null);
     }
 
-    public static Customer create(UUID userId, String email, FullName fullName, PhoneNumber phone) {
-        if (userId == null) {
-            throw new IllegalArgumentException("userId is required");
+    public static Customer create(UUID authUserId, String email, FullName fullName, PhoneNumber phone) {
+        if (authUserId == null) {
+            throw new IllegalArgumentException("authUserId is required");
         }
         Customer customer = new Customer();
-        customer.userId = userId;
+        customer.authUserId = authUserId;
         customer.email = email != null && !email.trim().isEmpty() ? email.trim().toLowerCase() : null;
         customer.fullName = fullName.value();
         customer.phone = phone != null ? phone.value() : null;

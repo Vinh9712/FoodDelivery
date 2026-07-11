@@ -1,5 +1,6 @@
 package com.fooddelivery.restaurant.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -15,7 +16,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ReviewRequest {
-    @NotNull
+    @JsonIgnore
     private UUID customerId;
 
     @NotNull

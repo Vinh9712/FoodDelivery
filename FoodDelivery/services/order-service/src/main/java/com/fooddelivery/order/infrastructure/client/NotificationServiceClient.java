@@ -21,6 +21,6 @@ public interface NotificationServiceClient {
      * @param request chứa orderId, customerId, channel, subject, message
      * @return xác nhận gửi thành công
      */
-    @PostMapping("/api/notifications")
+    @PostMapping("/internal/v1/notifications")
     NotificationResponse sendNotification(@RequestBody NotificationRequest request);
 }

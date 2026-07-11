@@ -37,7 +37,7 @@ public class UpdateProfileUseCaseImpl implements UpdateProfileUseCase {
     @Override
     @Transactional
     public CustomerProfileResponse execute(UpdateProfileCommand command) {
-        Customer customer = customerRepository.findByUserId(command.userId())
+        Customer customer = customerRepository.findByAuthUserId(command.authUserId())
                 .orElseThrow(() -> new BusinessRuleException("Customer profile not found"));
 
         String newPhone = (command.phone() != null && !command.phone().trim().isEmpty())
@@ -70,7 +70,7 @@ public class UpdateProfileUseCaseImpl implements UpdateProfileUseCase {
                 String payload = objectMapper.writeValueAsString(event);
                 OutboxEvent outboxEvent = new OutboxEvent(
                         "Customer",
-                        customer.getUserId(),
+                        customer.getAuthUserId(),
                         event.getEventType(),
                         payload
                 );
@@ -82,7 +82,7 @@ public class UpdateProfileUseCaseImpl implements UpdateProfileUseCase {
 
         return new CustomerProfileResponse(
                 customer.getId(),
-                customer.getUserId(),
+                customer.getAuthUserId(),
                 customer.getEmail(),
                 customer.getPhone(),
                 customer.getFullName(),
@@ -94,13 +94,13 @@ public class UpdateProfileUseCaseImpl implements UpdateProfileUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public CustomerProfileResponse getProfile(UUID userId) {
-        Customer customer = customerRepository.findByUserId(userId)
+    public CustomerProfileResponse getProfile(UUID authUserId) {
+        Customer customer = customerRepository.findByAuthUserId(authUserId)
                 .orElseThrow(() -> new BusinessRuleException("Customer profile not found"));
 
         return new CustomerProfileResponse(
                 customer.getId(),
-                customer.getUserId(),
+                customer.getAuthUserId(),
                 customer.getEmail(),
                 customer.getPhone(),
                 customer.getFullName(),

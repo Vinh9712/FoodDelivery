@@ -15,6 +15,11 @@
         <hypersistence-utils.version>3.9.2</hypersistence-utils.version>
     </properties>
     <dependencies>
+        <dependency>
+            <groupId>com.fooddelivery</groupId>
+            <artifactId>common-security</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <!-- Web & Actuator -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -124,13 +129,6 @@
             <groupId>org.wiremock</groupId>
             <artifactId>wiremock-standalone</artifactId>
             <version>3.12.1</version>
-            <scope>test</scope>
-        </dependency>
-
-        <!-- H2 — in-memory database cho integration test -->
-        <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

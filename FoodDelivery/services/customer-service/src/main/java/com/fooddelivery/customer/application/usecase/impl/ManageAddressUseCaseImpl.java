@@ -28,8 +28,8 @@ public class ManageAddressUseCaseImpl implements ManageAddressUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<AddressResponse> getAddresses(UUID userId) {
-        Customer customer = customerRepository.findByUserId(userId)
+    public List<AddressResponse> getAddresses(UUID authUserId) {
+        Customer customer = customerRepository.findByAuthUserId(authUserId)
                 .orElseThrow(() -> new NotFoundException("Customer profile not found"));
 
         return customer.getActiveAddresses().stream()
@@ -40,7 +40,7 @@ public class ManageAddressUseCaseImpl implements ManageAddressUseCase {
     @Override
     @Transactional
     public AddressResponse addAddress(AddAddressCommand command) {
-        Customer customer = customerRepository.findByUserId(command.userId())
+        Customer customer = customerRepository.findByAuthUserId(command.authUserId())
                 .orElseThrow(() -> new NotFoundException("Customer profile not found"));
 
         Address address = customer.addAddress(
@@ -61,7 +61,7 @@ public class ManageAddressUseCaseImpl implements ManageAddressUseCase {
     @Override
     @Transactional
     public AddressResponse updateAddress(UpdateAddressCommand command) {
-        Customer customer = customerRepository.findByUserId(command.userId())
+        Customer customer = customerRepository.findByAuthUserId(command.authUserId())
                 .orElseThrow(() -> new NotFoundException("Customer profile not found"));
 
         Address address = customer.updateAddress(
@@ -83,7 +83,7 @@ public class ManageAddressUseCaseImpl implements ManageAddressUseCase {
     @Override
     @Transactional
     public AddressResponse setDefaultAddress(SetDefaultAddressCommand command) {
-        Customer customer = customerRepository.findByUserId(command.userId())
+        Customer customer = customerRepository.findByAuthUserId(command.authUserId())
                 .orElseThrow(() -> new NotFoundException("Customer profile not found"));
 
         try {
@@ -99,7 +99,7 @@ public class ManageAddressUseCaseImpl implements ManageAddressUseCase {
     @Override
     @Transactional
     public void removeAddress(RemoveAddressCommand command) {
-        Customer customer = customerRepository.findByUserId(command.userId())
+        Customer customer = customerRepository.findByAuthUserId(command.authUserId())
                 .orElseThrow(() -> new NotFoundException("Customer profile not found"));
 
         try {

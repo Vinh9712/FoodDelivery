@@ -1,7 +1,6 @@
 package com.fooddelivery.restaurant.api.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,7 +16,6 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class RestaurantRequest {
-    @NotNull
     private UUID ownerId;
 
     @NotBlank

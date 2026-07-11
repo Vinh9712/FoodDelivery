@@ -8,6 +8,9 @@ import com.fooddelivery.restaurant.domain.RestaurantReview;
 import com.fooddelivery.restaurant.domain.ReviewRepository;
 import com.fooddelivery.restaurant.exception.RestaurantNotFoundException;
 import com.fooddelivery.restaurant.exception.ReviewAlreadyExistsException;
+import com.fooddelivery.restaurant.exception.ReviewVerificationException;
+import com.fooddelivery.restaurant.infrastructure.client.OrderServiceClient;
+import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -26,6 +29,7 @@ public class ReviewServiceImpl implements ReviewService {
 
     private final ReviewRepository reviewRepository;
     private final RestaurantRepository restaurantRepository;
+    private final OrderServiceClient orderServiceClient;
 
     @Override
     public ReviewResponse createReview(UUID restaurantId, ReviewRequest request) {
@@ -35,8 +39,13 @@ public class ReviewServiceImpl implements ReviewService {
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new RestaurantNotFoundException("Restaurant not found: " + restaurantId));
 
-        // Kiểm tra đã review chưa (1 order chỉ review 1 lần)
-        if (reviewRepository.existsByRestaurantIdAndOrderId(restaurantId, request.getOrderId())) {
+        if (request.getCustomerId() == null) {
+            throw new IllegalArgumentException("Customer ID is required");
+        }
+        verifyDeliveredOrder(restaurantId, request);
+
+        // Một order chỉ được review đúng một lần trên toàn hệ thống.
+        if (reviewRepository.existsByOrderId(request.getOrderId())) {
             throw new ReviewAlreadyExistsException("This order has already been reviewed");
         }
 
@@ -55,6 +64,23 @@ public class ReviewServiceImpl implements ReviewService {
         updateRestaurantRating(restaurantId);
 
         return mapToResponse(saved);
+    }
+
+    private void verifyDeliveredOrder(UUID restaurantId, ReviewRequest request) {
+        com.fooddelivery.restaurant.infrastructure.client.dto.ReviewEligibilityResponse eligibility;
+        try {
+            eligibility = orderServiceClient.getReviewEligibility(
+                    request.getOrderId(), request.getCustomerId(), restaurantId);
+        } catch (FeignException ex) {
+            throw new ReviewVerificationException("Order verification service is unavailable", ex);
+        } catch (RuntimeException ex) {
+            throw new ReviewVerificationException("Order verification service is unavailable", ex);
+        }
+        if (eligibility == null || !eligibility.eligible()) {
+            throw new IllegalArgumentException(eligibility == null
+                    ? "Order could not be verified"
+                    : eligibility.reason());
+        }
     }
 
     @Override

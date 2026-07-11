@@ -24,7 +24,15 @@ public class LogoutUseCaseImpl implements LogoutUseCase {
     @Transactional
     public void execute(LogoutCommand command) {
         String hashedToken = SecurityUtils.hashToken(command.refreshToken());
-        refreshTokenRepository.revokeByTokenHash(hashedToken);
-        // Session is_current will be handled when a new login occurs
+        refreshTokenRepository.findByTokenHash(hashedToken).ifPresent(token -> {
+            refreshTokenRepository.revokeByTokenHash(hashedToken);
+            if (token.getSessionId() != null) {
+                refreshTokenRepository.revokeAllBySessionId(token.getSessionId());
+                userSessionRepository.findById(token.getSessionId()).ifPresent(session -> {
+                    session.softDelete();
+                    userSessionRepository.save(session);
+                });
+            }
+        });
     }
 }

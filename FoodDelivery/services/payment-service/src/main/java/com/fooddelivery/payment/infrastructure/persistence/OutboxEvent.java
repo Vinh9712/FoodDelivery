@@ -1,9 +1,12 @@
 package com.fooddelivery.payment.infrastructure.persistence;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Type;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -27,8 +30,9 @@ public class OutboxEvent {
     @Column(name = "event_type", nullable = false, length = 100)
     private String eventType;
 
+    @Type(JsonType.class)
     @Column(name = "payload", nullable = false, columnDefinition = "jsonb")
-    private String payload;
+    private JsonNode payload;
 
     @Column(name = "occurred_at", nullable = false)
     private Instant occurredAt;
@@ -36,7 +40,7 @@ public class OutboxEvent {
     @Column(name = "published", nullable = false)
     private boolean published;
 
-    public OutboxEvent(String aggregateType, UUID aggregateId, String eventType, String payload) {
+    public OutboxEvent(String aggregateType, UUID aggregateId, String eventType, JsonNode payload) {
         this.id = UuidCreator.nextUuidV7();
         this.aggregateType = aggregateType;
         this.aggregateId = aggregateId;

@@ -46,13 +46,13 @@ class UserRegisteredEventListenerTests {
                 "eventType", "user.registered",
                 "payload", event));
 
-        when(customerRepository.findByUserId(userId)).thenReturn(Optional.empty());
+        when(customerRepository.findByAuthUserId(userId)).thenReturn(Optional.empty());
 
         listener.handle(message);
 
         ArgumentCaptor<Customer> customerCaptor = ArgumentCaptor.forClass(Customer.class);
         verify(customerRepository).save(customerCaptor.capture());
-        assertEquals(userId, customerCaptor.getValue().getUserId());
+        assertEquals(userId, customerCaptor.getValue().getAuthUserId());
         assertEquals("new@gmail.com", customerCaptor.getValue().getEmail());
         assertEquals("Nguyen Van A", customerCaptor.getValue().getFullName());
     }
@@ -70,7 +70,7 @@ class UserRegisteredEventListenerTests {
                 "eventType", "user.registered",
                 "payload", event));
 
-        when(customerRepository.findByUserId(userId))
+        when(customerRepository.findByAuthUserId(userId))
                 .thenReturn(Optional.of(Customer.create(userId, "new@gmail.com", "Nguyen Van A", "0987654321")));
 
         listener.handle(message);

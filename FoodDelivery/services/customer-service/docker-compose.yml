@@ -30,11 +30,12 @@ services:
       SPRING_PROFILES_ACTIVE: dev
       SPRING_CLOUD_CONFIG_ENABLED: "false"
       EUREKA_CLIENT_ENABLED: "false"
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/user_db
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${CUSTOMER_DB_NAME:-customer_db}
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: root
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       APP_KAFKA_ENABLED: "true"
+      APP_INTERNAL_GATEWAY_SECRET: ${INTERNAL_GATEWAY_SECRET:-test-gateway-secret}
     restart: unless-stopped
 
   postgres:

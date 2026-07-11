@@ -54,7 +54,7 @@ class ManageAddressUseCaseTests {
                 true
         );
 
-        when(customerRepository.findByUserId(any())).thenReturn(Optional.of(customer));
+        when(customerRepository.findByAuthUserId(any())).thenReturn(Optional.of(customer));
 
         AddressResponse res1 = useCase.addAddress(cmd1);
         assertTrue(res1.defaultAddress());
@@ -87,7 +87,7 @@ class ManageAddressUseCaseTests {
         UUID addressId = UuidCreator.getTimeOrderedEpoch();
         setPrivateField(addr, "id", addressId);
 
-        when(customerRepository.findByUserId(any())).thenReturn(Optional.of(customer));
+        when(customerRepository.findByAuthUserId(any())).thenReturn(Optional.of(customer));
 
         RemoveAddressCommand cmd = new RemoveAddressCommand(userId, addressId);
         useCase.removeAddress(cmd);
@@ -108,7 +108,7 @@ class ManageAddressUseCaseTests {
         setPrivateField(home, "id", homeId);
         setPrivateField(work, "id", workId);
 
-        when(customerRepository.findByUserId(userId)).thenReturn(Optional.of(customer));
+        when(customerRepository.findByAuthUserId(userId)).thenReturn(Optional.of(customer));
 
         AddressResponse response = useCase.setDefaultAddress(new SetDefaultAddressCommand(userId, workId));
 

@@ -11,6 +11,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -24,10 +26,13 @@ public class ReviewController {
     private final ReviewService reviewService;
 
     @PostMapping("/restaurants/{restaurantId}/reviews")
+    @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<ReviewResponse> createReview(
             @PathVariable("restaurantId") UUID restaurantId,
-            @Valid @RequestBody ReviewRequest request) {
+            @Valid @RequestBody ReviewRequest request,
+            Authentication authentication) {
         log.info("POST /restaurants/{}/reviews - Create review", restaurantId);
+        request.setCustomerId(UUID.fromString(authentication.getName()));
         ReviewResponse response = reviewService.createReview(restaurantId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -58,4 +63,5 @@ public class ReviewController {
         Double rating = reviewService.getAverageRating(restaurantId);
         return ResponseEntity.ok(rating != null ? rating : 0.0);
     }
+
 }

@@ -49,7 +49,7 @@ class UpdateProfileUseCaseTests {
                 "avatar.png"
         );
 
-        when(customerRepository.findByUserId(userId)).thenReturn(Optional.empty());
+        when(customerRepository.findByAuthUserId(userId)).thenReturn(Optional.empty());
 
         assertThrows(BusinessRuleException.class, () -> useCase.execute(command));
         verify(customerRepository, never()).save(any());
@@ -67,7 +67,7 @@ class UpdateProfileUseCaseTests {
                 "avatar.png"
         );
 
-        when(customerRepository.findByUserId(userId)).thenReturn(Optional.of(customer));
+        when(customerRepository.findByAuthUserId(userId)).thenReturn(Optional.of(customer));
 
         var response = useCase.execute(command);
 
@@ -90,7 +90,7 @@ class UpdateProfileUseCaseTests {
                 "avatar.png"
         );
 
-        when(customerRepository.findByUserId(userId)).thenReturn(Optional.of(customer));
+        when(customerRepository.findByAuthUserId(userId)).thenReturn(Optional.of(customer));
 
         useCase.execute(command);
 

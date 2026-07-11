@@ -30,7 +30,7 @@ public class UserRegisteredEventListener {
         }
 
         UserRegisteredEvent event = objectMapper.treeToValue(envelope.path("payload"), UserRegisteredEvent.class);
-        if (customerRepository.findByUserId(event.getUserId()).isPresent()) {
+        if (customerRepository.findByAuthUserId(event.getUserId()).isPresent()) {
             return;
         }
 

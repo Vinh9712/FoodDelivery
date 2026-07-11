@@ -20,7 +20,7 @@ import java.util.UUID;
  * </p>
  */
 @RestController
-@RequestMapping({"/api/deliveries", "/api/v1/delivery", "/api/v1/deliveries"})
+@RequestMapping("/internal/v1/deliveries")
 public class DeliveryMvpController {
 
     private static final Logger log = LoggerFactory.getLogger(DeliveryMvpController.class);

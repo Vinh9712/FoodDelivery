@@ -5,13 +5,13 @@
 #   2. docker compose up --build
 #
 # Boot order is enforced via healthchecks:
-#   postgres + kafka + keycloak  ->  eureka + config-server  ->  services + gateway
+#   postgres + kafka -> eureka + config-server -> authentication -> services + gateway
 #
 # Ports (host:container):
 #   8080 api-gateway   8081 customer   8082 restaurant   8083 order
 #   8084 delivery      8085 payment    8086 notification 8087 authentication
 #   8761 eureka        8888 config-server
-#   5432 postgres      9092 kafka      8090 kafka-ui      8180 keycloak
+#   5432 postgres      9092 kafka      8090 kafka-ui      8180 optional legacy keycloak
 # =====================================================================
 
 name: fooddelivery
@@ -30,6 +30,10 @@ x-discovery-env: &discovery-env
   SPRING_CLOUD_CONFIG_USERNAME: ${CONFIG_SERVER_USERNAME}
   SPRING_CLOUD_CONFIG_PASSWORD: ${CONFIG_SERVER_PASSWORD}
   EUREKA_URI: http://eureka-server:8761/eureka/
+  AUTH_JWKS_URI: http://authentication-service:8087/.well-known/jwks.json
+  JWT_ISSUER: ${JWT_ISSUER:-food-delivery-auth}
+  JWT_AUDIENCE: ${JWT_AUDIENCE:-food-delivery-api}
+  INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
 
 x-infra-deps: &infra-deps
   config-server:
@@ -103,6 +107,7 @@ services:
     networks: [backend]
 
   keycloak:
+    profiles: [legacy-keycloak]
     image: quay.io/keycloak/keycloak:26.0
     container_name: fd-keycloak
     command: ["start-dev", "--import-realm"]
@@ -168,15 +173,11 @@ services:
     container_name: fd-api-gateway
     depends_on:
       <<: *infra-deps
-      keycloak:
+      authentication-service:
         condition: service_healthy
     environment:
       <<: *discovery-env
-      JWT_SECRET: ${JWT_SECRET}
-      # NOTE: tokens minted via http://localhost:8180 carry that issuer; if you
-      # call the gateway with such a token the issuer will not match this URL.
-      # For pure dev you can disable auth with SPRING_PROFILES_ACTIVE=insecure.
-      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/fooddelivery
+      INTERNAL_GATEWAY_SECRET: ${INTERNAL_GATEWAY_SECRET}
     ports:
       - "8080:8080"
     healthcheck:
@@ -204,7 +205,12 @@ services:
       DB_PORT: "5432"
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-food-delivery-auth}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-food-delivery-api}
+      JWT_KEY_ID: ${JWT_KEY_ID:-food-delivery-auth-1}
+      JWT_PRIVATE_KEY_BASE64: ${JWT_PRIVATE_KEY_BASE64:-}
+      JWT_PUBLIC_KEY_BASE64: ${JWT_PUBLIC_KEY_BASE64:-}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-900000}
     ports:
       - "8087:8087"
     healthcheck:
@@ -231,6 +237,8 @@ services:
       DB_PORT: "5432"
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
+      CUSTOMER_DB_NAME: ${CUSTOMER_DB_NAME:-customer_db}
+      INTERNAL_GATEWAY_SECRET: ${INTERNAL_GATEWAY_SECRET}
     ports:
       - "8081:8081"
     healthcheck:
@@ -284,6 +292,8 @@ services:
       DB_PORT: "5432"
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
+      ORDER_DELIVERY_FEE: ${ORDER_DELIVERY_FEE:-15000}
+      PAYMENT_RECONCILIATION_DELAY_MS: ${PAYMENT_RECONCILIATION_DELAY_MS:-30000}
       ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
     ports:
       - "8083:8083"
@@ -338,6 +348,8 @@ services:
       DB_PORT: "5432"
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
+      PAYMENT_DB_NAME: ${PAYMENT_DB_NAME:-payment_db}
+      PAYMENT_SIMULATOR_MAX_AMOUNT: ${PAYMENT_SIMULATOR_MAX_AMOUNT:-500000}
       ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
     ports:
       - "8085:8085"

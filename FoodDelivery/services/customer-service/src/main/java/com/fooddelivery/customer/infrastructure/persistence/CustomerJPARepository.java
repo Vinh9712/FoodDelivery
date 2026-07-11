@@ -10,5 +10,5 @@ import java.util.UUID;
 
 @Repository
 public interface CustomerJPARepository extends JpaRepository<Customer, UUID>, JpaSpecificationExecutor<Customer> {
-    Optional<Customer> findByUserId(UUID userId);
+    Optional<Customer> findByAuthUserId(UUID authUserId);
 }

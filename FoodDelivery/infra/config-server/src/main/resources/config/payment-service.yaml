@@ -2,9 +2,14 @@
 server:
   port: 8085
 
+app:
+  payment:
+    simulator:
+      max-amount: ${PAYMENT_SIMULATOR_MAX_AMOUNT:500000}
+
 spring:
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/food_payment_db
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${PAYMENT_DB_NAME:payment_db}
     username: ${DB_USER}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver

@@ -21,8 +21,9 @@ public class Refund {
     @Id
     private UUID id;
 
-    @Column(name = "payment_id", nullable = false)
-    private UUID paymentId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "payment_id", nullable = false)
+    private Payment payment;
 
     @Column(name = "amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal amount;
@@ -43,17 +44,21 @@ public class Refund {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    public Refund(UUID id, UUID paymentId, Money amount, String reason) {
+    public Refund(UUID id, Payment payment, Money amount, String reason) {
         this.id = id;
-        this.paymentId = paymentId;
+        this.payment = payment;
         this.amount = amount.amount();
         this.reason = reason;
         this.status = RefundStatus.PENDING;
         this.createdAt = Instant.now();
     }
 
-    public static Refund create(UUID paymentId, Money amount, String reason) {
-        return new Refund(UuidCreator.nextUuidV7(), paymentId, amount, reason);
+    public static Refund create(Payment payment, Money amount, String reason) {
+        return new Refund(UuidCreator.nextUuidV7(), payment, amount, reason);
+    }
+
+    public UUID getPaymentId() {
+        return payment.getId();
     }
 
     public Money getAmount() {
