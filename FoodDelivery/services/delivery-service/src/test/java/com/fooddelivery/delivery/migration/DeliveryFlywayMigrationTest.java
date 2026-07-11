@@ -1,7 +1,17 @@
 package com.fooddelivery.delivery.migration;
 
+import com.fooddelivery.delivery.domain.model.Delivery;
+import com.fooddelivery.delivery.domain.model.DeliveryTracking;
+import com.fooddelivery.delivery.domain.model.Driver;
+import com.fooddelivery.delivery.domain.model.DriverReview;
+import com.fooddelivery.delivery.infrastructure.persistence.OutboxEvent;
+import com.fooddelivery.delivery.infrastructure.persistence.ProcessedEvent;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
+import org.hibernate.SessionFactory;
+import org.hibernate.boot.MetadataSources;
+import org.hibernate.boot.registry.StandardServiceRegistry;
+import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -11,8 +21,11 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 @Testcontainers(disabledWithoutDocker = true)
 class DeliveryFlywayMigrationTest {
@@ -31,6 +44,10 @@ class DeliveryFlywayMigrationTest {
         assertThat(columnExists("deliveries", "version")).isTrue();
         assertThat(indexExists("uq_deliveries_active_driver")).isTrue();
         assertThat(indexExists("idx_drivers_assignment_candidates")).isTrue();
+
+        assertThatCode(this::validateHibernateSchema)
+                .as("Hibernate ddl-auto=validate must succeed on schema after V5")
+                .doesNotThrowAnyException();
     }
 
     private void migrateTo(String version) {
@@ -47,6 +64,38 @@ class DeliveryFlywayMigrationTest {
                 .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
                 .locations("classpath:db/migration")
                 .load();
+    }
+
+    /**
+     * Boots a minimal Hibernate SessionFactory with hbm2ddl.auto=validate against the
+     * migrated PostgreSQL schema — mirrors production config-server settings.
+     */
+    private void validateHibernateSchema() {
+        Map<String, Object> settings = new HashMap<>();
+        settings.put("hibernate.connection.driver_class", "org.postgresql.Driver");
+        settings.put("hibernate.connection.url", POSTGRES.getJdbcUrl());
+        settings.put("hibernate.connection.username", POSTGRES.getUsername());
+        settings.put("hibernate.connection.password", POSTGRES.getPassword());
+        settings.put("hibernate.hbm2ddl.auto", "validate");
+        settings.put("hibernate.dialect", "org.hibernate.dialect.PostgreSQLDialect");
+
+        StandardServiceRegistry registry = new StandardServiceRegistryBuilder()
+                .applySettings(settings)
+                .build();
+        try {
+            SessionFactory sessionFactory = new MetadataSources(registry)
+                    .addAnnotatedClass(Driver.class)
+                    .addAnnotatedClass(Delivery.class)
+                    .addAnnotatedClass(DeliveryTracking.class)
+                    .addAnnotatedClass(DriverReview.class)
+                    .addAnnotatedClass(OutboxEvent.class)
+                    .addAnnotatedClass(ProcessedEvent.class)
+                    .buildMetadata()
+                    .buildSessionFactory();
+            sessionFactory.close();
+        } finally {
+            StandardServiceRegistryBuilder.destroy(registry);
+        }
     }
 
     private boolean columnExists(String table, String column) throws Exception {
