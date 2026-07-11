@@ -26,3 +26,9 @@ spring:
 eureka:
   client:
     enabled: false
+
+app:
+  delivery:
+    outbox:
+      relay:
+        enabled: false
