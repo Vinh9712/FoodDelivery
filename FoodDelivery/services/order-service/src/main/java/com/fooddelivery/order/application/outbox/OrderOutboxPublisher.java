@@ -15,7 +15,9 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @Service
 public class OrderOutboxPublisher {
@@ -71,19 +73,26 @@ public class OrderOutboxPublisher {
                     .get(sendTimeout.toMillis(), TimeUnit.MILLISECONDS);
             event.markPublished();
             log.info("Published order outbox event {} ({})", event.getId(), event.getEventType());
-        } catch (Exception ex) {
-            String error = rootMessage(ex);
-            int nextAttempt = event.getAttempts() + 1;
-            if (nextAttempt >= maxAttempts) {
-                event.markDeadLettered(error);
-                log.error("Order outbox event {} moved to dead letter after {} attempts: {}",
-                        event.getId(), nextAttempt, error);
-            } else {
-                Instant retryAt = now.plus(backoffFor(nextAttempt));
-                event.recordFailure(error, retryAt);
-                log.warn("Order outbox event {} failed; retry {} scheduled at {}: {}",
-                        event.getId(), nextAttempt, retryAt, error);
-            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            scheduleRetryOrDeadLetter(event, now, "Interrupted while waiting for Kafka ACK");
+            log.warn("Order outbox event {} interrupted; interrupt flag restored", event.getId());
+        } catch (ExecutionException | TimeoutException | RuntimeException ex) {
+            scheduleRetryOrDeadLetter(event, now, rootMessage(ex));
+        }
+    }
+
+    private void scheduleRetryOrDeadLetter(OutboxEvent event, Instant now, String error) {
+        int nextAttempt = event.getAttempts() + 1;
+        if (nextAttempt >= maxAttempts) {
+            event.markDeadLettered(error);
+            log.error("Order outbox event {} moved to dead letter after {} attempts: {}",
+                    event.getId(), nextAttempt, error);
+        } else {
+            Instant retryAt = now.plus(backoffFor(nextAttempt));
+            event.recordFailure(error, retryAt);
+            log.warn("Order outbox event {} failed; retry {} scheduled at {}: {}",
+                    event.getId(), nextAttempt, retryAt, error);
         }
     }
 

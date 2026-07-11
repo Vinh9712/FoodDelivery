@@ -37,12 +37,28 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
 
     /**
      * Batch of due unpublished event IDs (not dead-lettered, retry time reached).
+     * <p>
+     * Only the head of each aggregate's unpublished chain is eligible so later
+     * events (e.g. {@code OrderCancelled}) cannot overtake an earlier failed/
+     * locked event (e.g. {@code OrderCreated}) on the same aggregate.
+     * </p>
      */
     @Query("""
             select event.id from OutboxEvent event
             where event.publishedAt is null
               and event.deadLettered = false
               and (event.nextAttemptAt is null or event.nextAttemptAt <= :now)
+              and not exists (
+                  select 1 from OutboxEvent earlier
+                  where earlier.aggregateType = event.aggregateType
+                    and earlier.aggregateId = event.aggregateId
+                    and earlier.publishedAt is null
+                    and earlier.deadLettered = false
+                    and (
+                         earlier.createdAt < event.createdAt
+                         or (earlier.createdAt = event.createdAt and earlier.id < event.id)
+                    )
+              )
             order by event.createdAt
             """)
     List<UUID> findDueEventIds(@Param("now") Instant now, Pageable pageable);

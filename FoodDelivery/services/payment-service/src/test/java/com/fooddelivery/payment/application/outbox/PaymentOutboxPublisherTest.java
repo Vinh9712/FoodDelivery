@@ -75,6 +75,29 @@ class PaymentOutboxPublisherTest {
         assertThat(event.getAttempts()).isEqualTo(1);
     }
 
+    @Test
+    void restoresInterruptFlagWhenKafkaWaitIsInterrupted() throws Exception {
+        OutboxEventRepository repository = mock(OutboxEventRepository.class);
+        KafkaTemplate<String, Object> kafkaTemplate = mock();
+        OutboxEvent event = event("PaymentSucceeded");
+        when(repository.findByIdForUpdate(event.getId())).thenReturn(Optional.of(event));
+
+        CompletableFuture<SendResult<String, Object>> neverCompletes = new CompletableFuture<>();
+        when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(neverCompletes);
+
+        Thread worker = new Thread(() -> {
+            Thread.currentThread().interrupt();
+            publisher(repository, kafkaTemplate, 3).publishOne(event.getId());
+        });
+        worker.start();
+        worker.join(5_000);
+
+        assertThat(worker.isAlive()).isFalse();
+        assertThat(event.isPublished()).isFalse();
+        assertThat(event.getAttempts()).isEqualTo(1);
+        assertThat(event.getLastError()).contains("Interrupted");
+    }
+
     private PaymentOutboxPublisher publisher(
             OutboxEventRepository repository,
             KafkaTemplate<String, Object> kafkaTemplate,

@@ -155,6 +155,30 @@ class OrderOutboxPublisherTest {
         verify(kafkaTemplate, never()).send(anyString(), anyString(), any());
     }
 
+    @Test
+    void restoresInterruptFlagWhenKafkaWaitIsInterrupted() throws Exception {
+        OutboxEventRepository repository = mock(OutboxEventRepository.class);
+        KafkaTemplate<String, Object> kafkaTemplate = mock();
+        OutboxEvent event = event("OrderCreated");
+        when(repository.findByIdForUpdate(event.getId())).thenReturn(Optional.of(event));
+
+        CompletableFuture<SendResult<String, Object>> interrupted = new CompletableFuture<>();
+        when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(interrupted);
+
+        Thread worker = new Thread(() -> {
+            // complete exceptionally after interrupt so .get() surfaces InterruptedException
+            Thread.currentThread().interrupt();
+            publisher(repository, kafkaTemplate, 3).publishOne(event.getId());
+        });
+        worker.start();
+        worker.join(5_000);
+
+        assertThat(worker.isAlive()).isFalse();
+        assertThat(event.isPublished()).isFalse();
+        assertThat(event.getAttempts()).isEqualTo(1);
+        assertThat(event.getLastError()).contains("Interrupted");
+    }
+
     private OrderOutboxPublisher publisher(
             OutboxEventRepository repository,
             KafkaTemplate<String, Object> kafkaTemplate,
