@@ -5,7 +5,7 @@ target/
 .kotlin
 
 ### IntelliJ IDEA ###
-!/.idea/
+/.idea/
 .idea/modules.xml
 .idea/jarRepositories.xml
 .idea/compiler.xml
@@ -49,3 +49,6 @@ build/
 FOODDELIVERY_STRUCTURE.md
 .codebase-memory
 .codex
+FoodDelivery/PROJECT_INDEX.md
+.claude
+.agents
