@@ -2,6 +2,23 @@
 server:
   port: 8084
 
+app:
+  delivery:
+    outbox:
+      relay:
+        enabled: ${DELIVERY_OUTBOX_RELAY_ENABLED:true}
+        poll-delay: ${DELIVERY_OUTBOX_POLL_DELAY:2s}
+        send-timeout: ${DELIVERY_OUTBOX_SEND_TIMEOUT:5s}
+        retry-base-delay: ${DELIVERY_OUTBOX_RETRY_BASE_DELAY:5s}
+        retry-max-delay: ${DELIVERY_OUTBOX_RETRY_MAX_DELAY:5m}
+        max-attempts: ${DELIVERY_OUTBOX_MAX_ATTEMPTS:10}
+    assignment:
+      retry-enabled: ${DELIVERY_ASSIGNMENT_RETRY_ENABLED:true}
+      poll-delay: ${DELIVERY_ASSIGNMENT_POLL_DELAY:5s}
+      retry-base-delay: ${DELIVERY_ASSIGNMENT_RETRY_BASE_DELAY:10s}
+      retry-max-delay: ${DELIVERY_ASSIGNMENT_RETRY_MAX_DELAY:10m}
+      max-attempts: ${DELIVERY_ASSIGNMENT_MAX_ATTEMPTS:10}
+
 spring:
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/food_delivery_db

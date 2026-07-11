@@ -125,6 +125,14 @@ public class Driver {
 
     public void goOffline() {
         this.isOnline = false;
+        // Stay unavailable if still on an active delivery; otherwise free for reassignment.
+        if (this.available) {
+            // no-op: already free
+        }
+    }
+
+    public void linkUser(UUID userId) {
+        this.userId = userId;
     }
 
     public void updateLocation(BigDecimal latitude, BigDecimal longitude) {

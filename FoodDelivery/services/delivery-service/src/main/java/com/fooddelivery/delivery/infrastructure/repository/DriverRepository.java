@@ -16,10 +16,15 @@ import java.util.UUID;
 
 @Repository
 public interface DriverRepository extends JpaRepository<Driver, UUID> {
+
+    Optional<Driver> findByUserId(UUID userId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             select d from Driver d
-            where d.available = true and d.status = :status
+            where d.available = true
+              and d.isOnline = true
+              and d.status = :status
             order by d.id
             """)
     List<Driver> findAssignmentCandidatesForUpdate(
@@ -29,4 +34,8 @@ public interface DriverRepository extends JpaRepository<Driver, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select d from Driver d where d.id = :driverId")
     Optional<Driver> findByIdForUpdate(@Param("driverId") UUID driverId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select d from Driver d where d.userId = :userId")
+    Optional<Driver> findByUserIdForUpdate(@Param("userId") UUID userId);
 }

@@ -33,3 +33,6 @@ app:
   order:
     payment-reconciliation:
       enabled: false
+    outbox:
+      relay:
+        enabled: false

@@ -223,7 +223,7 @@ public class OrderSagaOrchestrator {
 
         // ── BƯỚC 3: Gọi Delivery Service ──
         var deliveryRequest = new DeliveryRequest(
-                order.getId(), order.getDeliveryAddressJson());
+                order.getId(), order.getCustomerId(), order.getDeliveryAddressJson());
 
         log.info("🚚 Gọi Delivery Service: orderId={}", order.getId());
         DeliveryResponse deliveryResponse;
