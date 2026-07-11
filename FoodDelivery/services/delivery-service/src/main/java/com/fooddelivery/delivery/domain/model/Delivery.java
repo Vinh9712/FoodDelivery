@@ -47,7 +47,7 @@ public class Delivery {
     @Column(name = "pickup_longitude", precision = 9, scale = 6)
     private BigDecimal pickupLongitude;
 
-    @Column(name = "dropoff_address")
+    @Column(name = "dropoff_address", columnDefinition = "text")
     private String dropoffAddressText;
 
     @Column(name = "dropoff_latitude", precision = 9, scale = 6)
@@ -80,6 +80,10 @@ public class Delivery {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private long version;
 
     /**
      * Create a new Delivery for an order (Legacy constructor preserved for backward compatibility).
@@ -139,6 +143,14 @@ public class Delivery {
         this.driverId = driverId;
         this.status = DeliveryStatus.DRIVER_ASSIGNED;
         this.driverAssignedAt = Instant.now();
+        this.updatedAt = Instant.now();
+    }
+
+    public void startFindingDriver() {
+        if (status != DeliveryStatus.PENDING && status != DeliveryStatus.FINDING_DRIVER) {
+            throw new InvalidDeliveryStateException(status);
+        }
+        this.status = DeliveryStatus.FINDING_DRIVER;
         this.updatedAt = Instant.now();
     }
 

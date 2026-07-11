@@ -80,7 +80,10 @@ public class Driver {
         this.totalReviews = 0;
     }
 
-    public void markUnavailable() {
+    public void reserveForDelivery() {
+        if (!available || status != DriverStatus.ACTIVE) {
+            throw new DriverNotEligibleException(this.id, this.status);
+        }
         this.available = false;
     }
 

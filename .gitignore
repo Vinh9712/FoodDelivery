@@ -46,10 +46,13 @@ build/
 !.env.example
 !**/.env.example
 
-FOODDELIVERY_STRUCTURE.md
-.codebase-memory
-.codex
-FoodDelivery/PROJECT_INDEX.md
-.claude
-.agents
-FoodDelivery/docs
+### Local AI / agent metadata ###
+/.agents/
+/.claude/
+/.codebase-memory/
+/.codex/
+
+### Local project indexes / notes ###
+/FOODDELIVERY_STRUCTURE.md
+/FoodDelivery/PROJECT_INDEX.md
+/FoodDelivery/docs/

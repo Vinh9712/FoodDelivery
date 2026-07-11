@@ -8,7 +8,7 @@ import java.util.UUID;
  */
 public record NotificationResponse(
         UUID notificationId,
-        String status,  // "SENT"
+        String status,
         Instant sentAt,
         String message
 ) {}

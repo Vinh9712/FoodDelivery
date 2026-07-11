@@ -151,6 +151,7 @@ public class PaymentApplicationService {
         var payload = objectMapper.createObjectNode()
                 .put("paymentId", payment.getId().toString())
                 .put("orderId", payment.getOrderId().toString())
+                .put("customerId", payment.getCustomerId().toString())
                 .put("status", payment.getStatus().name())
                 .put("amount", amount.toPlainString());
         outboxEventRepository.save(new OutboxEvent("Payment", payment.getId(), eventType, payload));

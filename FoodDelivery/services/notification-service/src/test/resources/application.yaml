@@ -2,7 +2,7 @@ spring:
   application:
     name: notification-service
   datasource:
-    url: jdbc:h2:mem:notification_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    url: jdbc:h2:mem:notification_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;INIT=CREATE DOMAIN IF NOT EXISTS JSONB AS JSON
     driver-class-name: org.h2.Driver
     username: sa
     password:
@@ -25,3 +25,11 @@ spring:
 eureka:
   client:
     enabled: false
+
+app:
+  notification:
+    dispatch:
+      enabled: false
+      retry-base-delay: 0s
+      retry-max-delay: 0s
+      max-attempts: 2

@@ -6,6 +6,14 @@ app:
   payment:
     simulator:
       max-amount: ${PAYMENT_SIMULATOR_MAX_AMOUNT:500000}
+    outbox:
+      relay:
+        enabled: ${PAYMENT_OUTBOX_RELAY_ENABLED:true}
+        poll-delay: ${PAYMENT_OUTBOX_POLL_DELAY:2s}
+        send-timeout: ${PAYMENT_OUTBOX_SEND_TIMEOUT:5s}
+        retry-base-delay: ${PAYMENT_OUTBOX_RETRY_BASE_DELAY:5s}
+        retry-max-delay: ${PAYMENT_OUTBOX_RETRY_MAX_DELAY:5m}
+        max-attempts: ${PAYMENT_OUTBOX_MAX_ATTEMPTS:10}
 
 spring:
   datasource:
