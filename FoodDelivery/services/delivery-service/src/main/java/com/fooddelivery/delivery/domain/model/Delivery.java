@@ -31,6 +31,9 @@ public class Delivery {
     @Column(name = "order_id", nullable = false, unique = true)
     private UUID orderId;
 
+    @Column(name = "customer_id")
+    private UUID customerId;
+
     @Column(name = "driver_id")
     private UUID driverId;
 
@@ -71,6 +74,18 @@ public class Delivery {
     @Column(name = "distance_km", precision = 5, scale = 2)
     private BigDecimal distanceKm;
 
+    @Column(name = "assignment_attempts", nullable = false)
+    private int assignmentAttempts;
+
+    @Column(name = "next_assignment_at")
+    private Instant nextAssignmentAt;
+
+    @Column(name = "last_assignment_error", length = 1000)
+    private String lastAssignmentError;
+
+    @Column(name = "failure_reason", length = 1000)
+    private String failureReason;
+
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "delivery_id")
     private List<DeliveryTracking> trackingPoints = new ArrayList<>();
@@ -85,24 +100,23 @@ public class Delivery {
     @Column(name = "version", nullable = false)
     private long version;
 
-    /**
-     * Create a new Delivery for an order (Legacy constructor preserved for backward compatibility).
-     */
     public Delivery(UUID orderId) {
-        this.id = UuidCreator.nextUuidV7();
-        this.orderId = orderId;
-        this.status = DeliveryStatus.PENDING;
-        this.createdAt = Instant.now();
-        this.updatedAt = this.createdAt;
+        this(orderId, null, null, null, null);
     }
 
     public Delivery(UUID orderId, Address pickupAddress, Address dropoffAddress, BigDecimal distanceKm) {
+        this(orderId, null, pickupAddress, dropoffAddress, distanceKm);
+    }
+
+    public Delivery(UUID orderId, UUID customerId, Address pickupAddress, Address dropoffAddress, BigDecimal distanceKm) {
         this.id = UuidCreator.nextUuidV7();
         this.orderId = orderId;
+        this.customerId = customerId;
         this.status = DeliveryStatus.PENDING;
         setPickupAddress(pickupAddress);
         setDropoffAddress(dropoffAddress);
         this.distanceKm = distanceKm;
+        this.assignmentAttempts = 0;
         this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
     }
@@ -133,9 +147,6 @@ public class Delivery {
         }
     }
 
-    /**
-     * Assign a driver to this delivery.
-     */
     public void assignDriver(UUID driverId) {
         if (status != DeliveryStatus.PENDING && status != DeliveryStatus.FINDING_DRIVER) {
             throw new InvalidDeliveryStateException(status);
@@ -143,6 +154,8 @@ public class Delivery {
         this.driverId = driverId;
         this.status = DeliveryStatus.DRIVER_ASSIGNED;
         this.driverAssignedAt = Instant.now();
+        this.nextAssignmentAt = null;
+        this.lastAssignmentError = null;
         this.updatedAt = Instant.now();
     }
 
@@ -151,7 +164,38 @@ public class Delivery {
             throw new InvalidDeliveryStateException(status);
         }
         this.status = DeliveryStatus.FINDING_DRIVER;
+        if (this.nextAssignmentAt == null) {
+            this.nextAssignmentAt = Instant.now();
+        }
         this.updatedAt = Instant.now();
+    }
+
+    public void setCustomerIfMissing(UUID customerId) {
+        if (this.customerId == null && customerId != null) {
+            this.customerId = customerId;
+            this.updatedAt = Instant.now();
+        }
+    }
+
+    public void recordAssignmentFailure(String error, Instant retryAt) {
+        this.assignmentAttempts++;
+        this.lastAssignmentError = truncate(error, 1000);
+        this.nextAssignmentAt = retryAt;
+        this.updatedAt = Instant.now();
+    }
+
+    public void acceptByDriver(UUID driverId) {
+        if (status == DeliveryStatus.DRIVER_ASSIGNED) {
+            if (!driverId.equals(this.driverId)) {
+                throw new InvalidDeliveryStateException(status);
+            }
+            this.updatedAt = Instant.now();
+            return;
+        }
+        if (status != DeliveryStatus.PENDING && status != DeliveryStatus.FINDING_DRIVER) {
+            throw new InvalidDeliveryStateException(status);
+        }
+        assignDriver(driverId);
     }
 
     public void pickUp() {
@@ -175,15 +219,44 @@ public class Delivery {
     }
 
     public void fail(String reason) {
-        if (status == DeliveryStatus.DELIVERED) {
+        if (status == DeliveryStatus.DELIVERED || status == DeliveryStatus.CANCELLED) {
             throw new InvalidDeliveryStateException(status);
         }
         this.status = DeliveryStatus.FAILED;
+        this.failureReason = truncate(reason, 1000);
+        this.nextAssignmentAt = null;
         this.updatedAt = Instant.now();
     }
 
+    public void cancel(String reason) {
+        if (status == DeliveryStatus.DELIVERED || status == DeliveryStatus.FAILED) {
+            throw new InvalidDeliveryStateException(status);
+        }
+        if (status == DeliveryStatus.PICKED_UP || status == DeliveryStatus.DELIVERING) {
+            throw new InvalidDeliveryStateException(status);
+        }
+        this.status = DeliveryStatus.CANCELLED;
+        this.failureReason = truncate(reason, 1000);
+        this.nextAssignmentAt = null;
+        this.updatedAt = Instant.now();
+    }
+
+    public boolean isActiveAssignment() {
+        return status == DeliveryStatus.DRIVER_ASSIGNED
+                || status == DeliveryStatus.PICKED_UP
+                || status == DeliveryStatus.DELIVERING;
+    }
+
+    public boolean isTerminal() {
+        return status == DeliveryStatus.DELIVERED
+                || status == DeliveryStatus.FAILED
+                || status == DeliveryStatus.CANCELLED;
+    }
+
     public void addTrackingPoint(BigDecimal lat, BigDecimal lng) {
-        if (status != DeliveryStatus.DRIVER_ASSIGNED && status != DeliveryStatus.PICKED_UP && status != DeliveryStatus.DELIVERING) {
+        if (status != DeliveryStatus.DRIVER_ASSIGNED
+                && status != DeliveryStatus.PICKED_UP
+                && status != DeliveryStatus.DELIVERING) {
             throw new InvalidDeliveryStateException(status);
         }
         trackingPoints.add(DeliveryTracking.of(this.id, lat, lng, this.status));
@@ -194,5 +267,12 @@ public class Delivery {
         if (this.status != expected) {
             throw new InvalidDeliveryStateException(this.status);
         }
+    }
+
+    private String truncate(String value, int max) {
+        if (value == null) {
+            return null;
+        }
+        return value.length() <= max ? value : value.substring(0, max);
     }
 }

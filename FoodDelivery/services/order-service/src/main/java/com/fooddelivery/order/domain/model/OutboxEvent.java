@@ -16,13 +16,9 @@ import com.fooddelivery.order.domain.util.UuidCreator;
 /**
  * Transactional Outbox Pattern entity.
  * <p>
- * Mỗi khi domain model thay đổi trạng thái, một OutboxEvent được tạo và lưu
- * trong cùng một database transaction. Outbox Poller (hoặc CDC) sẽ đọc các
- * event chưa publish và gửi lên message broker (Kafka).
- * </p>
- * <p>
- * Cấu trúc payload dạng JSONB cho phép lưu trữ linh hoạt mọi loại event
- * mà không cần thay đổi schema.
+ * Domain changes write an {@code OutboxEvent} in the same DB transaction.
+ * {@code OrderOutboxPublisher} relays unpublished events to Kafka with retry
+ * and dead-letter support.
  * </p>
  */
 @Entity
@@ -35,37 +31,47 @@ public class OutboxEvent {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
-    /** Loại aggregate root sinh ra event, ví dụ: "Order" */
+    /** Aggregate root type, e.g. {@code "Order"} */
     @Column(name = "aggregate_type", nullable = false, length = 100)
     private String aggregateType;
 
-    /** ID của aggregate root */
+    /** Aggregate root id */
     @Column(name = "aggregate_id", nullable = false)
     private UUID aggregateId;
 
-    /** Loại sự kiện, ví dụ: "OrderCreated", "OrderPaid", "OrderCancelled" */
+    /** Event type, e.g. {@code "OrderCreated"} */
     @Column(name = "event_type", nullable = false, length = 100)
     private String eventType;
 
-    /** Payload chi tiết của sự kiện, lưu dạng JSONB */
+    /** Event payload (JSONB) */
     @Type(JsonType.class)
     @Column(name = "payload", columnDefinition = "jsonb", nullable = false)
     private Map<String, Object> payload;
 
-    /** Thời điểm event được publish ra message broker, null nếu chưa publish */
+    /** Broker publish time; null while unpublished */
     @Column(name = "published_at")
     private Instant publishedAt;
+
+    @Column(name = "attempts", nullable = false)
+    private int attempts;
+
+    @Column(name = "next_attempt_at")
+    private Instant nextAttemptAt;
+
+    @Column(name = "last_error", length = 1000)
+    private String lastError;
+
+    @Column(name = "dead_lettered", nullable = false)
+    private boolean deadLettered;
+
+    @Column(name = "dead_lettered_at")
+    private Instant deadLetteredAt;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     /**
-     * Factory method tạo OutboxEvent mới (chưa publish).
-     *
-     * @param aggregateType loại aggregate root (e.g. "Order")
-     * @param aggregateId   ID của aggregate root
-     * @param eventType     tên sự kiện (e.g. "OrderPaid")
-     * @param payload       dữ liệu chi tiết của event
+     * Factory for a new unpublished outbox event (immediately due).
      */
     public static OutboxEvent create(String aggregateType, UUID aggregateId,
                                      String eventType, Map<String, Object> payload) {
@@ -75,15 +81,48 @@ public class OutboxEvent {
         event.aggregateId = aggregateId;
         event.eventType = eventType;
         event.payload = payload;
-        event.publishedAt = null; // chưa publish
+        event.publishedAt = null;
+        event.attempts = 0;
         event.createdAt = Instant.now();
+        event.nextAttemptAt = event.createdAt;
+        event.deadLettered = false;
         return event;
     }
 
-    /**
-     * Đánh dấu event đã được publish thành công.
-     */
     public void markPublished() {
         this.publishedAt = Instant.now();
+        this.nextAttemptAt = null;
+        this.lastError = null;
+    }
+
+    public void recordFailure(String error, Instant retryAt) {
+        this.attempts++;
+        this.lastError = truncate(error);
+        this.nextAttemptAt = retryAt;
+    }
+
+    public void markDeadLettered(String error) {
+        this.attempts++;
+        this.lastError = truncate(error);
+        this.deadLettered = true;
+        this.deadLetteredAt = Instant.now();
+        this.nextAttemptAt = null;
+    }
+
+    public boolean isPublished() {
+        return publishedAt != null;
+    }
+
+    public boolean canPublish(Instant now) {
+        return publishedAt == null
+                && !deadLettered
+                && (nextAttemptAt == null || !nextAttemptAt.isAfter(now));
+    }
+
+    private String truncate(String value) {
+        if (value == null) {
+            return "Unknown publishing error";
+        }
+        return value.length() <= 1000 ? value : value.substring(0, 1000);
     }
 }

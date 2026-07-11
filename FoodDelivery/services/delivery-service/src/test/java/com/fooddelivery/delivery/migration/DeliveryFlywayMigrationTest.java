@@ -35,18 +35,33 @@ class DeliveryFlywayMigrationTest {
             new PostgreSQLContainer<>("postgres:16-alpine");
 
     @Test
-    void upgradesExistingDeliverySchemaAndAddsAssignmentGuards() throws Exception {
+    void upgradesExistingDeliverySchemaThroughLifecycleMigrations() throws Exception {
         migrateTo("4");
-        Flyway latest = flyway();
-        latest.migrate();
-
-        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("5");
+        migrateTo("5");
+        assertThat(flyway().info().current().getVersion().getVersion()).isEqualTo("5");
         assertThat(columnExists("deliveries", "version")).isTrue();
         assertThat(indexExists("uq_deliveries_active_driver")).isTrue();
         assertThat(indexExists("idx_drivers_assignment_candidates")).isTrue();
 
+        migrateTo("6");
+        assertThat(columnExists("outbox_events", "published_at")).isTrue();
+        assertThat(columnExists("outbox_events", "attempts")).isTrue();
+        assertThat(columnExists("outbox_events", "next_attempt_at")).isTrue();
+        assertThat(columnExists("outbox_events", "last_error")).isTrue();
+        assertThat(columnExists("outbox_events", "dead_lettered")).isTrue();
+        assertThat(columnExists("outbox_events", "dead_lettered_at")).isTrue();
+        assertThat(indexExists("idx_delivery_outbox_due")).isTrue();
+
+        Flyway latest = flyway();
+        latest.migrate();
+        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("7");
+        assertThat(columnExists("deliveries", "assignment_attempts")).isTrue();
+        assertThat(columnExists("deliveries", "next_assignment_at")).isTrue();
+        assertThat(columnExists("deliveries", "customer_id")).isTrue();
+        assertThat(indexExists("idx_deliveries_assignment_due")).isTrue();
+
         assertThatCode(this::validateHibernateSchema)
-                .as("Hibernate ddl-auto=validate must succeed on schema after V5")
+                .as("Hibernate ddl-auto=validate must succeed on schema after V7")
                 .doesNotThrowAnyException();
     }
 
@@ -66,10 +81,6 @@ class DeliveryFlywayMigrationTest {
                 .load();
     }
 
-    /**
-     * Boots a minimal Hibernate SessionFactory with hbm2ddl.auto=validate against the
-     * migrated PostgreSQL schema — mirrors production config-server settings.
-     */
     private void validateHibernateSchema() {
         Map<String, Object> settings = new HashMap<>();
         settings.put("hibernate.connection.driver_class", "org.postgresql.Driver");
