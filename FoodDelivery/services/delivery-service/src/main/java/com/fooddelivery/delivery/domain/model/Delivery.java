@@ -170,6 +170,13 @@ public class Delivery {
         this.updatedAt = Instant.now();
     }
 
+    public void setCustomerIfMissing(UUID customerId) {
+        if (this.customerId == null && customerId != null) {
+            this.customerId = customerId;
+            this.updatedAt = Instant.now();
+        }
+    }
+
     public void recordAssignmentFailure(String error, Instant retryAt) {
         this.assignmentAttempts++;
         this.lastAssignmentError = truncate(error, 1000);

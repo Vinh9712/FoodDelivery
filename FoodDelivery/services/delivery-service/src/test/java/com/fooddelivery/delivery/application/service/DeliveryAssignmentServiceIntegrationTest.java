@@ -124,6 +124,18 @@ class DeliveryAssignmentServiceIntegrationTest {
         assertThat(outboxEventRepository.count()).isEqualTo(1);
     }
 
+    @Test
+    void retryBackfillsCustomerOwnershipForExistingDelivery() {
+        UUID orderId = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
+        Delivery existing = deliveryRepository.save(new Delivery(orderId));
+
+        assignmentService.scheduleDelivery(orderId, customerId, "Customer address");
+
+        Delivery updated = deliveryRepository.findById(existing.getId()).orElseThrow();
+        assertThat(updated.getCustomerId()).isEqualTo(customerId);
+    }
+
     private Driver onlineDriver(String name, String phone, String plate) {
         Driver driver = new Driver(name, phone, VehicleType.MOTORBIKE, plate, new BigDecimal("4.80"));
         driver.goOnline();

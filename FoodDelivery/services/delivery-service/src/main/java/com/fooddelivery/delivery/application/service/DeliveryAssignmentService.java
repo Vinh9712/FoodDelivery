@@ -74,7 +74,8 @@ public class DeliveryAssignmentService {
                 .orElseGet(() -> createDelivery(orderId, customerId, deliveryAddressSnapshot));
 
         if (delivery.getCustomerId() == null && customerId != null) {
-            // customer_id is only set at create; leave as-is if already present
+            delivery.setCustomerIfMissing(customerId);
+            deliveryRepository.save(delivery);
         }
 
         if (delivery.getDriverId() != null) {
