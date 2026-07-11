@@ -26,3 +26,14 @@ spring:
 eureka:
   client:
     enabled: false
+
+app:
+  delivery:
+    outbox:
+      relay:
+        enabled: false
+    assignment:
+      retry-enabled: false
+      max-attempts: 3
+      retry-base-delay: 1s
+      retry-max-delay: 10s

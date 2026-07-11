@@ -17,13 +17,14 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({DeliveryAssignmentService.class, DeliveryAssignmentServiceIntegrationTest.TestConfig.class})
+@Import(DeliveryAssignmentServiceIntegrationTest.TestConfig.class)
 class DeliveryAssignmentServiceIntegrationTest {
 
     @TestConfiguration
@@ -31,6 +32,17 @@ class DeliveryAssignmentServiceIntegrationTest {
         @Bean
         ObjectMapper objectMapper() {
             return new ObjectMapper();
+        }
+
+        @Bean
+        DeliveryAssignmentService deliveryAssignmentService(
+                DeliveryRepository deliveryRepository,
+                DriverRepository driverRepository,
+                OutboxEventRepository outboxEventRepository,
+                ObjectMapper objectMapper) {
+            return new DeliveryAssignmentService(
+                    deliveryRepository, driverRepository, outboxEventRepository, objectMapper,
+                    Duration.ofSeconds(1), Duration.ofSeconds(10), 3);
         }
     }
 
@@ -53,9 +65,7 @@ class DeliveryAssignmentServiceIntegrationTest {
 
     @Test
     void scheduleDeliveryPersistsAssignmentAndIsIdempotent() {
-        Driver driver = driverRepository.save(new Driver(
-                "Driver One", "0900000001", VehicleType.MOTORBIKE,
-                "59A1-00001", new BigDecimal("4.80")));
+        Driver driver = onlineDriver("Driver One", "0900000001", "59A1-00001");
         UUID orderId = UUID.randomUUID();
 
         DeliveryAssignmentService.AssignmentResult first = assignmentService.scheduleDelivery(
@@ -79,7 +89,22 @@ class DeliveryAssignmentServiceIntegrationTest {
     }
 
     @Test
-    void scheduleDeliveryPersistsPendingAssignmentAndCanRetry() {
+    void twoOrdersCannotTakeSameDriver() {
+        Driver driver = onlineDriver("Shared", "0900000009", "59A1-00009");
+
+        DeliveryAssignmentService.AssignmentResult first = assignmentService.scheduleDelivery(
+                UUID.randomUUID(), "Addr 1");
+        DeliveryAssignmentService.AssignmentResult second = assignmentService.scheduleDelivery(
+                UUID.randomUUID(), "Addr 2");
+
+        assertThat(first.assigned()).isTrue();
+        assertThat(first.driverId()).isEqualTo(driver.getId());
+        assertThat(second.assigned()).isFalse();
+        assertThat(second.deliveryStatus()).isEqualTo(DeliveryStatus.FINDING_DRIVER);
+    }
+
+    @Test
+    void scheduleDeliveryPersistsPendingAssignmentAndCanRetryWhenDriverOnline() {
         UUID orderId = UUID.randomUUID();
 
         DeliveryAssignmentService.AssignmentResult pending = assignmentService.scheduleDelivery(
@@ -89,9 +114,7 @@ class DeliveryAssignmentServiceIntegrationTest {
         assertThat(deliveryRepository.findByOrderId(orderId).orElseThrow().getStatus())
                 .isEqualTo(DeliveryStatus.FINDING_DRIVER);
 
-        Driver driver = driverRepository.save(new Driver(
-                "Driver Two", "0900000002", VehicleType.MOTORBIKE,
-                "59A1-00002", new BigDecimal("4.70")));
+        Driver driver = onlineDriver("Driver Two", "0900000002", "59A1-00002");
         DeliveryAssignmentService.AssignmentResult retried = assignmentService.scheduleDelivery(
                 orderId, "456 Le Loi, District 3");
 
@@ -99,5 +122,11 @@ class DeliveryAssignmentServiceIntegrationTest {
         assertThat(retried.deliveryId()).isEqualTo(pending.deliveryId());
         assertThat(retried.driverId()).isEqualTo(driver.getId());
         assertThat(outboxEventRepository.count()).isEqualTo(1);
+    }
+
+    private Driver onlineDriver(String name, String phone, String plate) {
+        Driver driver = new Driver(name, phone, VehicleType.MOTORBIKE, plate, new BigDecimal("4.80"));
+        driver.goOnline();
+        return driverRepository.save(driver);
     }
 }
