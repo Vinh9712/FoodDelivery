@@ -81,7 +81,7 @@ public class Driver {
     }
 
     public void reserveForDelivery() {
-        if (!available || status != DriverStatus.ACTIVE) {
+        if (!available || !isOnline || status != DriverStatus.ACTIVE) {
             throw new DriverNotEligibleException(this.id, this.status);
         }
         this.available = false;

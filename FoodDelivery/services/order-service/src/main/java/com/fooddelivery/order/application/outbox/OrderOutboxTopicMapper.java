@@ -12,7 +12,7 @@ public class OrderOutboxTopicMapper {
         return switch (eventType) {
             case "OrderCreated" -> "order.placed";
             case "OrderCancelled" -> "order.cancelled";
-            case "DriverAssigned" -> "order.driver-assigned";
+            case "DriverAssigned" -> "driver.assigned";
             case "OrderStatusChanged" -> "order.status-changed";
             default -> throw new IllegalArgumentException("Unsupported order event type: " + eventType);
         };

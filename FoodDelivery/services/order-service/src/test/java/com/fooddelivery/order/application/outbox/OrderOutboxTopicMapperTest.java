@@ -13,7 +13,7 @@ class OrderOutboxTopicMapperTest {
     void mapsKnownOrderEventTypes() {
         assertThat(mapper.topicFor("OrderCreated")).isEqualTo("order.placed");
         assertThat(mapper.topicFor("OrderCancelled")).isEqualTo("order.cancelled");
-        assertThat(mapper.topicFor("DriverAssigned")).isEqualTo("order.driver-assigned");
+        assertThat(mapper.topicFor("DriverAssigned")).isEqualTo("driver.assigned");
         assertThat(mapper.topicFor("OrderStatusChanged")).isEqualTo("order.status-changed");
     }
 

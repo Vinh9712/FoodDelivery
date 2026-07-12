@@ -172,6 +172,7 @@ public class Order {
                 "orderId", order.id.toString(),
                 "customerId", customerId.toString(),
                 "restaurantId", restaurantId.toString(),
+                "deliveryAddress", order.deliveryAddressSnapshot.addressLine(),
                 "status", "PENDING"
         ));
 

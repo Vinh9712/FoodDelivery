@@ -120,8 +120,8 @@ public class DeliveryAssignmentService {
     }
 
     @Transactional
-    public void autoAssignDriver(UUID orderId) {
-        scheduleDelivery(orderId, null, null);
+    public void autoAssignDriver(UUID orderId, UUID customerId, String deliveryAddressSnapshot) {
+        scheduleDelivery(orderId, customerId, deliveryAddressSnapshot);
     }
 
     /**

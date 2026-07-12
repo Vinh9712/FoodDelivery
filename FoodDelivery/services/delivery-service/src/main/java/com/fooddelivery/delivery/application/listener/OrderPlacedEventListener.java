@@ -28,16 +28,23 @@ public class OrderPlacedEventListener {
     @KafkaListener(topics = "order.placed", groupId = "delivery-service")
     @Transactional
     public void onOrderPlaced(OrderPlacedEvent event) {
+        if (event == null || event.eventId() == null || event.payload() == null
+                || event.payload().orderId() == null || event.payload().customerId() == null
+                || event.payload().deliveryAddress() == null || event.payload().deliveryAddress().isBlank()) {
+            throw new IllegalArgumentException(
+                    "Valid eventId, orderId, customerId, and deliveryAddress are required");
+        }
         if (processedEventRepository.existsByEventIdAndConsumer(event.eventId(), CONSUMER_NAME)) {
             log.debug("Event {} already processed by {}, skipping", event.eventId(), CONSUMER_NAME);
             return;
         }
 
         try {
-            UUID orderId = event.payload().orderId();
-            log.info("Received order.placed event for order {}", orderId);
-            deliveryAssignmentService.autoAssignDriver(orderId);
-            
+            OrderPlacedPayload payload = event.payload();
+            log.info("Received order.placed event for order {}", payload.orderId());
+            deliveryAssignmentService.autoAssignDriver(
+                    payload.orderId(), payload.customerId(), payload.deliveryAddress());
+
             processedEventRepository.markProcessed(event.eventId(), CONSUMER_NAME);
         } catch (Exception e) {
             log.error("Failed to process order.placed event: {}", e.getMessage(), e);
@@ -55,6 +62,8 @@ public class OrderPlacedEventListener {
     ) {}
 
     public record OrderPlacedPayload(
-            UUID orderId
+            UUID orderId,
+            UUID customerId,
+            String deliveryAddress
     ) {}
 }
