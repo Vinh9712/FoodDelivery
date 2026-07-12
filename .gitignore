@@ -55,5 +55,5 @@ build/
 ### Local project indexes / notes ###
 /FOODDELIVERY_STRUCTURE.md
 /FoodDelivery/PROJECT_INDEX.md
-/FoodDelivery/docs/*
-/FoodDelivery/scripts/*
+/FoodDelivery/docs/
+/FoodDelivery/scripts/
