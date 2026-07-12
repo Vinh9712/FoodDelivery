@@ -55,4 +55,5 @@ build/
 ### Local project indexes / notes ###
 /FOODDELIVERY_STRUCTURE.md
 /FoodDelivery/PROJECT_INDEX.md
-/FoodDelivery/docs/
+/FoodDelivery/docs/*
+!/FoodDelivery/docs/FoodDelivery-Demo-Order-Flow.postman_collection.json

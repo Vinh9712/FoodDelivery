@@ -91,6 +91,13 @@ public class DeliveryController {
         return ResponseEntity.ok(points);
     }
 
+    @GetMapping("/order/{orderId}")
+    @PreAuthorize("@deliveryAuthorization.canReadOrder(#orderId, authentication)")
+    public ResponseEntity<DeliveryDetailResponse> getByOrderId(@PathVariable UUID orderId) {
+        return ResponseEntity.ok(DeliveryDetailResponse.from(
+                deliveryLifecycleService.getDeliveryByOrderId(orderId)));
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("@deliveryAuthorization.canRead(#id, authentication)")
     public ResponseEntity<DeliveryDetailResponse> get(@PathVariable("id") UUID id) {

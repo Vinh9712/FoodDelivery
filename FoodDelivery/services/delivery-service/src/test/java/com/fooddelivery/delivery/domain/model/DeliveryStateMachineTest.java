@@ -46,4 +46,17 @@ class DeliveryStateMachineTest {
         delivery.cancel("customer cancelled");
         assertThat(delivery.getStatus()).isEqualTo(DeliveryStatus.CANCELLED);
     }
+
+    @Test
+    void cannotFailAlreadyFailedDelivery() {
+        Delivery delivery = new Delivery(UUID.randomUUID());
+        UUID driverId = UUID.randomUUID();
+        delivery.assignDriver(driverId);
+        delivery.fail("first failure");
+
+        assertThatThrownBy(() -> delivery.fail("retry"))
+                .isInstanceOf(InvalidDeliveryStateException.class);
+        assertThat(delivery.getDriverId()).isEqualTo(driverId);
+        assertThat(delivery.getFailureReason()).isEqualTo("first failure");
+    }
 }

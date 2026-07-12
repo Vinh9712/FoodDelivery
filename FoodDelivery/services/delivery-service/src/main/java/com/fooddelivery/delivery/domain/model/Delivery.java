@@ -219,7 +219,8 @@ public class Delivery {
     }
 
     public void fail(String reason) {
-        if (status == DeliveryStatus.DELIVERED || status == DeliveryStatus.CANCELLED) {
+        if (status == DeliveryStatus.DELIVERED || status == DeliveryStatus.CANCELLED
+                || status == DeliveryStatus.FAILED) {
             throw new InvalidDeliveryStateException(status);
         }
         this.status = DeliveryStatus.FAILED;

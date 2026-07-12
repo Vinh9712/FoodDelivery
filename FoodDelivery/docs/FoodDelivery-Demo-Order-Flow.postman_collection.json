@@ -1,0 +1,400 @@
+{
+  "info": {
+    "_postman_id": "fooddelivery-demo-order-flow-2026",
+    "name": "FoodDelivery Demo Order Flow",
+    "description": "Repeatable local-Docker Admin, Restaurant Owner, Customer, and Driver order demonstration. Uses deterministic seed data. Password and tokens stay in variables and are never logged.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080", "type": "string" },
+    { "key": "deliveryBaseUrl", "value": "http://localhost:8084", "type": "string" },
+    { "key": "adminEmail", "value": "admin.demo@food.local", "type": "string" },
+    { "key": "ownerEmail", "value": "owner.demo@food.local", "type": "string" },
+    { "key": "customerEmail", "value": "customer.demo@food.local", "type": "string" },
+    { "key": "driverEmail", "value": "driver.demo@food.local", "type": "string" },
+    { "key": "demoPassword", "value": "Demo@12345", "type": "string" },
+    { "key": "restaurantId", "value": "20000000-0000-0000-0000-000000000001", "type": "string" },
+    { "key": "categoryId", "value": "20000000-0000-0000-0000-000000000002", "type": "string" },
+    { "key": "menuItemId", "value": "20000000-0000-0000-0000-000000000003", "type": "string" },
+    { "key": "adminToken", "value": "", "type": "string" },
+    { "key": "ownerToken", "value": "", "type": "string" },
+    { "key": "customerToken", "value": "", "type": "string" },
+    { "key": "driverToken", "value": "", "type": "string" },
+    { "key": "orderId", "value": "", "type": "string" },
+    { "key": "deliveryId", "value": "", "type": "string" },
+    { "key": "orderIdempotencyKey", "value": "demo-order-{{$guid}}", "type": "string" },
+    { "key": "deliveryPollCount", "value": "0", "type": "string" },
+    { "key": "maxDeliveryPolls", "value": "20", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "00 Health",
+      "item": [
+        {
+          "name": "Gateway health",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('gateway responds', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "if (body.status !== undefined) pm.expect(body.status).to.eql('UP');"
+          ] } }],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/actuator/health" }
+        },
+        {
+          "name": "Authentication health",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('authentication service responds', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "if (body.status !== undefined) pm.expect(body.status).to.eql('UP');"
+          ] } }],
+          "request": { "method": "GET", "header": [], "url": "http://localhost:8087/actuator/health" }
+        },
+        {
+          "name": "Restaurant health",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('restaurant service responds', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "if (body.status !== undefined) pm.expect(body.status).to.eql('UP');"
+          ] } }],
+          "request": { "method": "GET", "header": [], "url": "http://localhost:8082/actuator/health" }
+        },
+        {
+          "name": "Order health",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('order service responds', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "if (body.status !== undefined) pm.expect(body.status).to.eql('UP');"
+          ] } }],
+          "request": { "method": "GET", "header": [], "url": "http://localhost:8083/actuator/health" }
+        },
+        {
+          "name": "Delivery health",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('delivery service responds', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "if (body.status !== undefined) pm.expect(body.status).to.eql('UP');"
+          ] } }],
+          "request": { "method": "GET", "header": [], "url": "http://localhost:8084/actuator/health" }
+        }
+      ]
+    },
+    {
+      "name": "01 Admin Setup",
+      "item": [
+        {
+          "name": "Admin login",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('admin login succeeds', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.expect(body.data.accessToken).to.be.a('string').and.not.empty;",
+            "pm.collectionVariables.set('adminToken', body.data.accessToken);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}" },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          }
+        },
+        {
+          "name": "Admin verifies seeded users",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('admin user list succeeds', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.expect(body.data).to.exist;"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/api/v1/admin/users?size=20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Owner Restaurant",
+      "item": [
+        {
+          "name": "Restaurant owner login",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('owner login succeeds', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.expect(body.data.accessToken).to.be.a('string').and.not.empty;",
+            "pm.collectionVariables.set('ownerToken', body.data.accessToken);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{ownerEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}" },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          }
+        },
+        {
+          "name": "Get seeded restaurant",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('restaurant lookup succeeds', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.expect(body.id).to.eql(pm.collectionVariables.get('restaurantId'));",
+            "pm.collectionVariables.set('restaurantId', body.id);"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{ownerToken}}" }],
+            "url": "{{baseUrl}}/api/v1/restaurants/{{restaurantId}}"
+          }
+        },
+        {
+          "name": "Get seeded restaurant menu",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('menu lookup succeeds', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.expect(body.restaurantId).to.eql(pm.collectionVariables.get('restaurantId'));",
+            "const category = (body.categories || []).find((entry) => (entry.items || []).some((item) => item.id === pm.collectionVariables.get('menuItemId')));",
+            "pm.expect(category, 'seeded category containing menu item').to.exist;",
+            "const item = category.items.find((entry) => entry.id === pm.collectionVariables.get('menuItemId'));",
+            "pm.expect(item.id).to.eql(pm.collectionVariables.get('menuItemId'));",
+            "pm.collectionVariables.set('categoryId', category.id);",
+            "pm.collectionVariables.set('menuItemId', item.id);"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{ownerToken}}" }],
+            "url": "{{baseUrl}}/api/v1/restaurants/{{restaurantId}}/menu"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Customer Order",
+      "item": [
+        {
+          "name": "Customer login",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('customer login succeeds', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.expect(body.data.accessToken).to.be.a('string').and.not.empty;",
+            "pm.collectionVariables.set('customerToken', body.data.accessToken);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}" },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          }
+        },
+        {
+          "name": "Create order",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": [
+              "const key = pm.collectionVariables.get('orderIdempotencyKey');",
+              "if (key === 'demo-order-{{$guid}}' || !key) pm.collectionVariables.set('orderIdempotencyKey', 'demo-order-' + pm.variables.replaceIn('{{$guid}}'));"
+            ] } },
+            { "listen": "test", "script": { "exec": [
+              "pm.test('order creation succeeds', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.expect(body.id).to.be.a('string').and.not.empty;",
+              "pm.collectionVariables.set('orderId', body.id);"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" },
+              { "key": "Idempotency-Key", "value": "{{orderIdempotencyKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"restaurantId\": \"{{restaurantId}}\",\n  \"deliveryAddress\": \"123 Nguyen Trai, District 5, Ho Chi Minh City\",\n  \"items\": [\n    { \"menuItemId\": \"{{menuItemId}}\", \"quantity\": 1 }\n  ]\n}" },
+            "url": "{{baseUrl}}/api/v1/orders"
+          }
+        },
+        {
+          "name": "Retry order with same idempotency key",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('idempotent retry is accepted', () => pm.expect([200, 201]).to.include(pm.response.code));",
+            "const body = pm.response.json();",
+            "pm.expect(body.id).to.eql(pm.collectionVariables.get('orderId'));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" },
+              { "key": "Idempotency-Key", "value": "{{orderIdempotencyKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"restaurantId\": \"{{restaurantId}}\",\n  \"deliveryAddress\": \"123 Nguyen Trai, District 5, Ho Chi Minh City\",\n  \"items\": [\n    { \"menuItemId\": \"{{menuItemId}}\", \"quantity\": 1 }\n  ]\n}" },
+            "url": "{{baseUrl}}/api/v1/orders"
+          }
+        },
+        {
+          "name": "Get order",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('order lookup succeeds', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.expect(body.id).to.eql(pm.collectionVariables.get('orderId'));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
+            "url": "{{baseUrl}}/api/v1/orders/{{orderId}}"
+          }
+        },
+        {
+          "name": "Poll delivery by order ID",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "let count = Number(pm.collectionVariables.get('deliveryPollCount') || 0);",
+            "const max = Number(pm.collectionVariables.get('maxDeliveryPolls') || 20);",
+            "if (pm.response.code === 200) {",
+            "  const body = pm.response.json();",
+            "  pm.expect(body.id).to.be.a('string').and.not.empty;",
+            "  pm.expect(body.orderId).to.eql(pm.collectionVariables.get('orderId'));",
+            "  pm.collectionVariables.set('deliveryId', body.id);",
+            "  pm.collectionVariables.set('deliveryPollCount', '0');",
+            "  pm.test('delivery exists for order', () => pm.response.to.have.status(200));",
+            "} else {",
+            "  pm.test('delivery is not ready yet', () => pm.expect(pm.response.code).to.eql(404));",
+            "  count += 1;",
+            "  pm.collectionVariables.set('deliveryPollCount', String(count));",
+            "  if (count >= max) throw new Error('Delivery not created after ' + max + ' polls');",
+            "  setTimeout(() => {}, 1000);",
+            "  pm.execution.setNextRequest(pm.info.requestName);",
+            "}"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{deliveryBaseUrl}}/api/v1/deliveries/order/{{orderId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Driver Delivery",
+      "item": [
+        {
+          "name": "Driver login",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('driver login succeeds', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.expect(body.data.accessToken).to.be.a('string').and.not.empty;",
+            "pm.collectionVariables.set('driverToken', body.data.accessToken);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{driverEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}" },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          }
+        },
+        {
+          "name": "Driver goes online",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('driver online succeeds', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.expect(body.online).to.eql(true);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+            "url": "{{deliveryBaseUrl}}/api/v1/drivers/me/online"
+          }
+        },
+        {
+          "name": "Driver accepts delivery",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('delivery accepted', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.expect(body.status).to.eql('DRIVER_ASSIGNED');"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+            "url": "{{deliveryBaseUrl}}/api/v1/deliveries/{{deliveryId}}/accept"
+          }
+        },
+        {
+          "name": "Driver marks picked up",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('delivery picked up', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.expect(body.status).to.eql('PICKED_UP');"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+            "url": "{{deliveryBaseUrl}}/api/v1/deliveries/{{deliveryId}}/picked-up"
+          }
+        },
+        {
+          "name": "Driver starts delivery",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('delivery started', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.expect(body.status).to.eql('DELIVERING');"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+            "url": "{{deliveryBaseUrl}}/api/v1/deliveries/{{deliveryId}}/start-delivery"
+          }
+        },
+        {
+          "name": "Driver completes delivery",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('delivery completed', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.expect(body.status).to.eql('DELIVERED');"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+            "url": "{{deliveryBaseUrl}}/api/v1/deliveries/{{deliveryId}}/complete"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Verification",
+      "item": [
+        {
+          "name": "Customer verifies final order",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('final order read succeeds', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.expect(body.id).to.eql(pm.collectionVariables.get('orderId'));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
+            "url": "{{baseUrl}}/api/v1/orders/{{orderId}}"
+          }
+        },
+        {
+          "name": "Customer verifies final delivery",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('final delivery read succeeds', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.expect(body.id).to.eql(pm.collectionVariables.get('deliveryId'));",
+            "pm.expect(body.orderId).to.eql(pm.collectionVariables.get('orderId'));",
+            "pm.expect(body.status).to.eql('DELIVERED');"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
+            "url": "{{baseUrl}}/api/v1/deliveries/order/{{orderId}}"
+          }
+        },
+        {
+          "name": "Admin verifies notifications",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('admin notification read succeeds', () => pm.response.to.have.status(200));",
+            "pm.expect(pm.response.json()).to.be.an('array');"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/api/v1/notifications"
+          }
+        }
+      ]
+    }
+  ]
+}

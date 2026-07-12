@@ -89,6 +89,19 @@ class DeliveryAssignmentServiceIntegrationTest {
     }
 
     @Test
+    void offlineDriverCannotBeAssigned() {
+        Driver driver = new Driver("Offline", "0900000010", VehicleType.MOTORBIKE,
+                "59A1-00010", new BigDecimal("4.80"));
+        driverRepository.save(driver);
+
+        DeliveryAssignmentService.AssignmentResult result = assignmentService.scheduleDelivery(
+                UUID.randomUUID(), UUID.randomUUID(), "Addr");
+
+        assertThat(result.assigned()).isFalse();
+        assertThat(driverRepository.findById(driver.getId()).orElseThrow().isAvailable()).isTrue();
+    }
+
+    @Test
     void twoOrdersCannotTakeSameDriver() {
         Driver driver = onlineDriver("Shared", "0900000009", "59A1-00009");
 
@@ -122,6 +135,18 @@ class DeliveryAssignmentServiceIntegrationTest {
         assertThat(retried.deliveryId()).isEqualTo(pending.deliveryId());
         assertThat(retried.driverId()).isEqualTo(driver.getId());
         assertThat(outboxEventRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void scheduleDeliveryPersistsCustomerAndAddress() {
+        UUID orderId = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
+
+        assignmentService.scheduleDelivery(orderId, customerId, "123 Nguyen Trai");
+
+        Delivery delivery = deliveryRepository.findByOrderId(orderId).orElseThrow();
+        assertThat(delivery.getCustomerId()).isEqualTo(customerId);
+        assertThat(delivery.getDropoffAddress().text()).isEqualTo("123 Nguyen Trai");
     }
 
     @Test

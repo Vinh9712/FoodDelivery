@@ -2,9 +2,11 @@ package com.fooddelivery.delivery.application.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fooddelivery.delivery.domain.exception.DeliveryAccessDeniedException;
+import com.fooddelivery.delivery.domain.exception.DeliveryNotFoundException;
 import com.fooddelivery.delivery.domain.exception.InvalidDeliveryStateException;
 import com.fooddelivery.delivery.domain.model.Delivery;
 import com.fooddelivery.delivery.domain.model.Driver;
+import com.fooddelivery.delivery.domain.model.valueobject.Address;
 import com.fooddelivery.delivery.domain.model.valueobject.DeliveryStatus;
 import com.fooddelivery.delivery.domain.model.valueobject.VehicleType;
 import com.fooddelivery.delivery.infrastructure.repository.DeliveryRepository;
@@ -114,9 +116,30 @@ class DeliveryLifecycleServiceIntegrationTest {
         Driver driver = driverRepository.findById(fx.driverId()).orElseThrow();
         Delivery delivery = deliveryRepository.findById(fx.deliveryId()).orElseThrow();
         assertThat(delivery.getStatus()).isEqualTo(DeliveryStatus.FAILED);
+        assertThat(delivery.getDriverId()).isEqualTo(fx.driverId());
         assertThat(driver.isAvailable()).isTrue();
         assertThat(outboxEventRepository.findAll().stream()
                 .anyMatch(e -> "delivery.failed".equals(e.getEventType()))).isTrue();
+    }
+
+    @Test
+    void getsDeliveryByOrderId() {
+        UUID orderId = UUID.randomUUID();
+        Delivery saved = deliveryRepository.save(new Delivery(
+                orderId, UUID.randomUUID(), null, new Address("123 Nguyen Trai", null, null), null));
+
+        Delivery found = lifecycleService.getDeliveryByOrderId(orderId);
+
+        assertThat(found.getId()).isEqualTo(saved.getId());
+        assertThat(found.getOrderId()).isEqualTo(orderId);
+    }
+
+    @Test
+    void missingOrderDeliveryThrowsNotFound() {
+        UUID orderId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> lifecycleService.getDeliveryByOrderId(orderId))
+                .isInstanceOf(DeliveryNotFoundException.class);
     }
 
     @Test

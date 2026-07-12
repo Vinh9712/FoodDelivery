@@ -125,6 +125,12 @@ public class DeliveryLifecycleService {
     }
 
     @Transactional(readOnly = true)
+    public Delivery getDeliveryByOrderId(UUID orderId) {
+        return deliveryRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new DeliveryNotFoundException(orderId));
+    }
+
+    @Transactional(readOnly = true)
     public List<DeliveryTracking> getTracking(UUID deliveryId) {
         Delivery delivery = getDelivery(deliveryId);
         return List.copyOf(delivery.getTrackingPoints());
