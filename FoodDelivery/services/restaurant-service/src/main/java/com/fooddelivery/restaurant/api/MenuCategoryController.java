@@ -17,7 +17,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
 @Slf4j
-public class MenuCategoryController {
+public class    MenuCategoryController {
 
     private final MenuCategoryService menuCategoryService;
 
