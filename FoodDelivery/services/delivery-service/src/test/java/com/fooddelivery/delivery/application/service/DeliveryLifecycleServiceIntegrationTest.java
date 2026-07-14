@@ -1,5 +1,6 @@
 package com.fooddelivery.delivery.application.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fooddelivery.delivery.domain.exception.DeliveryAccessDeniedException;
 import com.fooddelivery.delivery.domain.exception.DeliveryNotFoundException;
@@ -73,6 +74,8 @@ class DeliveryLifecycleServiceIntegrationTest {
     private DriverRepository driverRepository;
     @Autowired
     private OutboxEventRepository outboxEventRepository;
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Test
     void cannotSkipStateFromAssignedToDelivering() {
@@ -89,6 +92,27 @@ class DeliveryLifecycleServiceIntegrationTest {
 
         assertThatThrownBy(() -> lifecycleService.pickUp(fx.deliveryId(), other.getUserId()))
                 .isInstanceOf(DeliveryAccessDeniedException.class);
+    }
+
+    @Test
+    void acceptingDeliveryPublishesCompleteDriverSnapshot() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
+        Delivery delivery = deliveryRepository.save(new Delivery(
+                orderId, customerId, null, new Address("Addr", null, null), null));
+        UUID userId = UUID.randomUUID();
+        Driver driver = onlineDriver("Late", "0900555666", "59L1-55555", userId);
+
+        lifecycleService.accept(delivery.getId(), userId);
+
+        var event = outboxEventRepository.findAll().stream()
+                .filter(e -> "driver.assigned".equals(e.getEventType()))
+                .findFirst().orElseThrow();
+        JsonNode payload = objectMapper.readTree(event.getPayload());
+        assertThat(payload.path("customerId").asText()).isEqualTo(customerId.toString());
+        assertThat(payload.path("driver").path("driverId").asText()).isEqualTo(driver.getId().toString());
+        assertThat(payload.path("driver").path("fullName").asText()).isEqualTo("Late");
+        assertThat(payload.path("assignedAt").asText()).isNotBlank();
     }
 
     @Test

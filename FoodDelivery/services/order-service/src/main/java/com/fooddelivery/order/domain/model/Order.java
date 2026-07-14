@@ -331,7 +331,8 @@ public class Order {
         if (this.status == OrderStatus.DELIVERED || this.status == OrderStatus.CANCELLED) {
             return;
         }
-        this.assignedDriverSnapshot = driverInfo;
+        this.assignedDriverSnapshot = Objects.requireNonNull(driverInfo, "driverInfo must not be null");
+        this.driverId = driverInfo.driverId();
         this.updatedAt = Instant.now();
     }
 

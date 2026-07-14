@@ -207,11 +207,14 @@ public class DeliveryAssignmentService {
         return Duration.ofMillis(Math.min(delayMillis, retryMaxDelay.toMillis()));
     }
 
-    private String buildDriverAssignedPayload(Delivery delivery, Driver driver) {
+    String buildDriverAssignedPayload(Delivery delivery, Driver driver) {
         try {
             ObjectNode root = objectMapper.createObjectNode();
             root.put("orderId", delivery.getOrderId().toString());
             root.put("deliveryId", delivery.getId().toString());
+            if (delivery.getCustomerId() != null) {
+                root.put("customerId", delivery.getCustomerId().toString());
+            }
 
             ObjectNode driverNode = objectMapper.createObjectNode();
             driverNode.put("driverId", driver.getId().toString());

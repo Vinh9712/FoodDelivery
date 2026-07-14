@@ -58,7 +58,7 @@ public class DeliveryLifecycleService {
         deliveryRepository.save(delivery);
         outboxEventRepository.save(new OutboxEvent(
                 "Delivery", delivery.getId(), "driver.assigned",
-                lifecyclePayload(delivery, "driver.assigned")));
+                assignmentService.buildDriverAssignedPayload(delivery, driver)));
         return delivery;
     }
 

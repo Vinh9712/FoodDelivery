@@ -48,6 +48,17 @@ class DeliveryStateMachineTest {
     }
 
     @Test
+    void repeatedCancelPreservesFirstReason() {
+        Delivery delivery = new Delivery(UUID.randomUUID());
+        delivery.cancel("first cancellation");
+
+        delivery.cancel("retry cancellation");
+
+        assertThat(delivery.getStatus()).isEqualTo(DeliveryStatus.CANCELLED);
+        assertThat(delivery.getFailureReason()).isEqualTo("first cancellation");
+    }
+
+    @Test
     void cannotFailAlreadyFailedDelivery() {
         Delivery delivery = new Delivery(UUID.randomUUID());
         UUID driverId = UUID.randomUUID();

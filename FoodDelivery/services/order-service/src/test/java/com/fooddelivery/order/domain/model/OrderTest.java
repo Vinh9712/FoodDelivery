@@ -121,6 +121,7 @@ class OrderTest {
 
             assertTrue(order.getAssignedDriver().isPresent());
             assertEquals(driverInfo.driverId(), order.getAssignedDriver().get().driverId());
+            assertEquals(driverInfo.driverId(), order.getDriverId());
             assertEquals(driverInfo.fullName(), order.getAssignedDriver().get().fullName());
         }
     }

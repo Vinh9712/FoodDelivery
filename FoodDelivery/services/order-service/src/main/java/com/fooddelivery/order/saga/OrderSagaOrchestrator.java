@@ -237,6 +237,7 @@ public class OrderSagaOrchestrator {
         // Xử lý kết quả giao vận bằng Switch Expression
         return switch (deliveryResponse.status().toUpperCase()) {
             case "ASSIGNED" -> handleDeliverySuccess(order, deliveryResponse);
+            case "FINDING_DRIVER" -> order;
             case "FAILED"   -> handleDeliveryFailure(order, deliveryResponse.message());
             default -> {
                 log.warn("⚠️ Trạng thái giao vận không xác định: {}", deliveryResponse.status());

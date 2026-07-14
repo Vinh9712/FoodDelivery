@@ -18,14 +18,10 @@ public class DeliveryAuthorizationService {
     private final DriverRepository driverRepository;
 
     public boolean canRead(UUID deliveryId, Authentication authentication) {
-        return canRead(deliveryRepository.findById(deliveryId).orElse(null), authentication);
+        return canReadDelivery(deliveryRepository.findById(deliveryId).orElse(null), authentication);
     }
 
-    public boolean canReadOrder(UUID orderId, Authentication authentication) {
-        return canRead(deliveryRepository.findByOrderId(orderId).orElse(null), authentication);
-    }
-
-    private boolean canRead(Delivery delivery, Authentication authentication) {
+    public boolean canReadDelivery(Delivery delivery, Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) {
             return false;
         }

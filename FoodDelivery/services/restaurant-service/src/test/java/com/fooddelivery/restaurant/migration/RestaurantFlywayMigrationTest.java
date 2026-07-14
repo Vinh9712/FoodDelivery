@@ -43,7 +43,7 @@ class RestaurantFlywayMigrationTest {
         assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("6");
         assertThat(value("SELECT display_order FROM menu_categories WHERE name = 'Category'"))
                 .isEqualTo("7");
-        assertThat(value("SELECT is_active FROM menu_categories WHERE name = 'Category'"))
+        assertThat(value("SELECT is_active::text FROM menu_categories WHERE name = 'Category'"))
                 .isEqualTo("true");
         assertThat(value("SELECT preparation_time_min FROM menu_items WHERE name = 'Item'"))
                 .isEqualTo("20");

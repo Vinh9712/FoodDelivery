@@ -178,6 +178,7 @@ services:
     environment:
       <<: *discovery-env
       INTERNAL_GATEWAY_SECRET: ${INTERNAL_GATEWAY_SECRET}
+      KAFKA_BOOTSTRAP: kafka:9092
     ports:
       - "8080:8080"
     healthcheck:

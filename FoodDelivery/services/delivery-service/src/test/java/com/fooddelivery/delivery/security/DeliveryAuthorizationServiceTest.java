@@ -33,37 +33,63 @@ class DeliveryAuthorizationServiceTest {
     }
 
     @Test
-    void owningCustomerCanReadByOrderId() {
-        UUID orderId = UUID.randomUUID();
+    void owningCustomerCanReadLoadedDelivery() {
         UUID customerId = UUID.randomUUID();
-        Delivery delivery = new Delivery(orderId, customerId, null, new Address("Address", null, null), null);
-        when(deliveries.findByOrderId(orderId)).thenReturn(Optional.of(delivery));
+        Delivery delivery = new Delivery(UUID.randomUUID(), customerId, null,
+                new Address("Address", null, null), null);
 
-        assertThat(authorization.canReadOrder(orderId, auth(customerId, "CUSTOMER"))).isTrue();
-        assertThat(authorization.canReadOrder(orderId, auth(UUID.randomUUID(), "CUSTOMER"))).isFalse();
+        assertThat(authorization.canReadDelivery(delivery, auth(customerId, "CUSTOMER"))).isTrue();
     }
 
     @Test
-    void assignedDriverCanReadByOrderId() {
-        UUID orderId = UUID.randomUUID();
+    void nonOwningCustomerCannotReadLoadedDelivery() {
+        Delivery delivery = new Delivery(UUID.randomUUID(), UUID.randomUUID(), null,
+                new Address("Address", null, null), null);
+
+        assertThat(authorization.canReadDelivery(delivery, auth(UUID.randomUUID(), "CUSTOMER"))).isFalse();
+    }
+
+    @Test
+    void adminCanReadLoadedDelivery() {
+        Delivery delivery = new Delivery(UUID.randomUUID());
+
+        assertThat(authorization.canReadDelivery(delivery, auth(UUID.randomUUID(), "ADMIN"))).isTrue();
+    }
+
+    @Test
+    void serviceCanReadLoadedDelivery() {
+        Delivery delivery = new Delivery(UUID.randomUUID());
+
+        assertThat(authorization.canReadDelivery(delivery, auth(UUID.randomUUID(), "SERVICE"))).isTrue();
+    }
+
+    @Test
+    void assignedDriverCanReadLoadedDelivery() {
         UUID driverUserId = UUID.randomUUID();
         Driver driver = mock(Driver.class);
-        Delivery delivery = new Delivery(orderId);
+        Delivery delivery = new Delivery(UUID.randomUUID());
         UUID driverId = UUID.randomUUID();
         delivery.assignDriver(driverId);
-        when(deliveries.findByOrderId(orderId)).thenReturn(Optional.of(delivery));
         when(driver.getId()).thenReturn(driverId);
         when(drivers.findByUserId(driverUserId)).thenReturn(Optional.of(driver));
 
-        assertThat(authorization.canReadOrder(orderId, auth(driverUserId, "DRIVER"))).isTrue();
+        assertThat(authorization.canReadDelivery(delivery, auth(driverUserId, "DRIVER"))).isTrue();
     }
 
     @Test
-    void adminCanReadBeforeLookupAndMissingDeliveryIsDeniedToCustomer() {
-        UUID orderId = UUID.randomUUID();
+    void absentDeliveryCannotBeReadByCustomer() {
+        assertThat(authorization.canReadDelivery(null, auth(UUID.randomUUID(), "CUSTOMER"))).isFalse();
+    }
 
-        assertThat(authorization.canReadOrder(orderId, auth(UUID.randomUUID(), "ADMIN"))).isTrue();
-        assertThat(authorization.canReadOrder(orderId, auth(UUID.randomUUID(), "CUSTOMER"))).isFalse();
+    @Test
+    void canReadByIdStillLoadsDeliveryFromRepository() {
+        UUID deliveryId = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
+        Delivery delivery = new Delivery(UUID.randomUUID(), customerId, null,
+                new Address("Address", null, null), null);
+        when(deliveries.findById(deliveryId)).thenReturn(Optional.of(delivery));
+
+        assertThat(authorization.canRead(deliveryId, auth(customerId, "CUSTOMER"))).isTrue();
     }
 
     private Authentication auth(UUID subject, String role) {
