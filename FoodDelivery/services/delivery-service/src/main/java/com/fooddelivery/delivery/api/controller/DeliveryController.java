@@ -5,7 +5,9 @@ import com.fooddelivery.delivery.api.dto.FailDeliveryRequest;
 import com.fooddelivery.delivery.api.dto.TrackingPointResponse;
 import com.fooddelivery.delivery.application.service.DeliveryAssignmentService;
 import com.fooddelivery.delivery.application.service.DeliveryLifecycleService;
+import com.fooddelivery.delivery.domain.exception.DeliveryNotFoundException;
 import com.fooddelivery.delivery.domain.model.Delivery;
+import com.fooddelivery.delivery.security.DeliveryAuthorizationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,6 +27,7 @@ public class DeliveryController {
 
     private final DeliveryAssignmentService deliveryAssignmentService;
     private final DeliveryLifecycleService deliveryLifecycleService;
+    private final DeliveryAuthorizationService deliveryAuthorization;
 
     @PostMapping("/{deliveryId}/assign-driver/{driverId}")
     @PreAuthorize("hasRole('ADMIN')")
@@ -92,10 +95,14 @@ public class DeliveryController {
     }
 
     @GetMapping("/order/{orderId}")
-    @PreAuthorize("@deliveryAuthorization.canReadOrder(#orderId, authentication)")
-    public ResponseEntity<DeliveryDetailResponse> getByOrderId(@PathVariable UUID orderId) {
-        return ResponseEntity.ok(DeliveryDetailResponse.from(
-                deliveryLifecycleService.getDeliveryByOrderId(orderId)));
+    public ResponseEntity<DeliveryDetailResponse> getByOrderId(
+            @PathVariable UUID orderId,
+            Authentication authentication) {
+        Delivery delivery = deliveryLifecycleService.getDeliveryByOrderId(orderId);
+        if (!deliveryAuthorization.canReadDelivery(delivery, authentication)) {
+            throw new DeliveryNotFoundException(orderId);
+        }
+        return ResponseEntity.ok(DeliveryDetailResponse.from(delivery));
     }
 
     @GetMapping("/{id}")

@@ -33,7 +33,7 @@ public class InternalDeliveryController {
         DeliveryAssignmentService.AssignmentResult result = deliveryAssignmentService.scheduleDelivery(
                 request.orderId(), request.customerId(), request.deliveryAddressSnapshot());
 
-        String responseStatus = result.assigned() ? "ASSIGNED" : "FAILED";
+        String responseStatus = result.assigned() ? "ASSIGNED" : result.deliveryStatus().name();
         log.info("Delivery scheduling completed: orderId={}, deliveryId={}, status={}, driverId={}",
                 result.orderId(), result.deliveryId(), responseStatus, result.driverId());
 

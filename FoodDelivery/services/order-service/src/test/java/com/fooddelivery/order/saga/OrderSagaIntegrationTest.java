@@ -526,6 +526,32 @@ class OrderSagaIntegrationTest {
         paymentServer.verify(1, getRequestedFor(urlMatching("/internal/v1/payments/orders/.*")));
     }
 
+    @Test
+    @org.junit.jupiter.api.Order(8)
+    @DisplayName("No available driver: Delivery FINDING_DRIVER keeps Order CONFIRMED without refund")
+    void test_noDriver_keepsOrderConfirmedWithoutCompensation() {
+        var restaurantId = UUID.randomUUID();
+        var itemId = UUID.randomUUID();
+        stubSingleItemQuote(restaurantId, itemId, "50000");
+        paymentServer.stubFor(post(urlEqualTo("/internal/v1/payments"))
+                .willReturn(aResponse().withStatus(200).withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {"orderId":null,"status":"SUCCESS","transactionId":"TXN-NO-DRIVER","message":"ok"}
+                                """)));
+        deliveryServer.stubFor(post(urlEqualTo("/internal/v1/deliveries"))
+                .willReturn(aResponse().withStatus(200).withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {"orderId":null,"status":"FINDING_DRIVER","driverId":null,"message":"No available driver"}
+                                """)));
+
+        Order result = sagaOrchestrator.placeOrder(
+                UUID.randomUUID(), restaurantId, "Retry Street", "no-driver-" + UUID.randomUUID(),
+                List.of(new OrderSagaOrchestrator.RequestedItem(itemId, 1)));
+
+        assertThat(result.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+        paymentServer.verify(0, postRequestedFor(urlEqualTo("/internal/v1/payments/refund")));
+    }
+
     private void stubSingleItemQuote(UUID restaurantId, UUID itemId, String price) {
         restaurantServer.stubFor(
                 post(urlEqualTo("/internal/v1/restaurants/" + restaurantId + "/menu/quote"))

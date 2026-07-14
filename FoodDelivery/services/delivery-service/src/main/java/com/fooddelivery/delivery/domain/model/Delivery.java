@@ -230,6 +230,9 @@ public class Delivery {
     }
 
     public void cancel(String reason) {
+        if (status == DeliveryStatus.CANCELLED) {
+            return;
+        }
         if (status == DeliveryStatus.DELIVERED || status == DeliveryStatus.FAILED) {
             throw new InvalidDeliveryStateException(status);
         }
