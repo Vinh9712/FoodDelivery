@@ -13,10 +13,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 @Component
 @ConditionalOnProperty(name = "app.kafka.enabled", havingValue = "true", matchIfMissing = true)
@@ -52,7 +49,7 @@ public class OutboxRelayScheduler {
         for (UUID eventId : eventIds) {
             try {
                 transactionTemplate.executeWithoutResult(status -> {
-                    java.util.Optional<OutboxEvent> optEvent = outboxEventRepository.findByIdForUpdate(eventId);
+                    Optional<OutboxEvent> optEvent = outboxEventRepository.findByIdForUpdate(eventId);
                     if (optEvent.isPresent()) {
                         OutboxEvent event = optEvent.get();
                         if (event.getPublishedAt() == null) {

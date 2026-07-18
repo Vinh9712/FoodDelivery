@@ -6,7 +6,6 @@ import com.fooddelivery.restaurant.api.dto.RestaurantSearchRequest;
 import com.fooddelivery.restaurant.domain.Restaurant;
 import com.fooddelivery.restaurant.domain.RestaurantRepository;
 import com.fooddelivery.restaurant.domain.RestaurantStatus;
-import com.fooddelivery.restaurant.event.EventPublisher;
 import com.fooddelivery.restaurant.exception.RestaurantNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,7 +26,6 @@ import java.util.stream.Collectors;
 public class RestaurantServiceImpl implements RestaurantService {
 
     private final RestaurantRepository restaurantRepository;
-    private final EventPublisher eventPublisher;  // <-- THÊM DÒNG NÀY
 
     @Override
     public RestaurantResponse createRestaurant(RestaurantRequest request) {
@@ -51,9 +49,6 @@ public class RestaurantServiceImpl implements RestaurantService {
 
         Restaurant saved = restaurantRepository.save(restaurant);
         log.info("Restaurant created with ID: {}", saved.getId());
-
-        // Gửi event
-        eventPublisher.publishRestaurantCreated(saved);
 
         return mapToResponse(saved);
     }
@@ -80,9 +75,6 @@ public class RestaurantServiceImpl implements RestaurantService {
 
         Restaurant updated = restaurantRepository.save(restaurant);
 
-        // Gửi event
-        eventPublisher.publishRestaurantUpdated(updated);
-
         return mapToResponse(updated);
     }
 
@@ -94,8 +86,6 @@ public class RestaurantServiceImpl implements RestaurantService {
         }
         restaurantRepository.deleteById(id);
 
-        // Gửi event
-        eventPublisher.publishRestaurantDeleted(id);
     }
 
     @Override
