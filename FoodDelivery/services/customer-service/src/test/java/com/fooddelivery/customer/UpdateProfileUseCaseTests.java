@@ -1,12 +1,10 @@
 package com.fooddelivery.customer;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fooddelivery.commonweb.exception.BusinessRuleException;
 import com.fooddelivery.customer.application.command.UpdateProfileCommand;
 import com.fooddelivery.customer.application.usecase.impl.UpdateProfileUseCaseImpl;
 import com.fooddelivery.customer.domain.model.Customer;
 import com.fooddelivery.customer.domain.repository.CustomerRepository;
-import com.fooddelivery.customer.infrastructure.persistence.OutboxEventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -21,21 +19,12 @@ import static org.mockito.Mockito.*;
 class UpdateProfileUseCaseTests {
 
     private CustomerRepository customerRepository;
-    private OutboxEventRepository outboxEventRepository;
-    private ObjectMapper objectMapper;
     private UpdateProfileUseCaseImpl useCase;
 
     @BeforeEach
     void setUp() {
         customerRepository = mock(CustomerRepository.class);
-        outboxEventRepository = mock(OutboxEventRepository.class);
-        objectMapper = new ObjectMapper();
-        objectMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
-        useCase = new UpdateProfileUseCaseImpl(
-                customerRepository,
-                outboxEventRepository,
-                objectMapper
-        );
+        useCase = new UpdateProfileUseCaseImpl(customerRepository);
     }
 
     @Test

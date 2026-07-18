@@ -6,7 +6,6 @@ import com.fooddelivery.restaurant.api.dto.RestaurantSearchRequest;
 import com.fooddelivery.restaurant.domain.Restaurant;
 import com.fooddelivery.restaurant.domain.RestaurantRepository;
 import com.fooddelivery.restaurant.domain.RestaurantStatus;
-import com.fooddelivery.restaurant.event.EventPublisher;
 import com.fooddelivery.restaurant.exception.RestaurantNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,9 +33,6 @@ class RestaurantServiceImplTest {
 
     @Mock
     private RestaurantRepository restaurantRepository;
-
-    @Mock
-    private EventPublisher eventPublisher;
 
     @InjectMocks
     private RestaurantServiceImpl restaurantService;
@@ -95,7 +91,6 @@ class RestaurantServiceImplTest {
         assertEquals("PENDING", response.getStatus());
 
         verify(restaurantRepository, times(1)).save(any(Restaurant.class));
-        verify(eventPublisher, times(1)).publishRestaurantCreated(any(Restaurant.class));
     }
 
     @Test
@@ -203,7 +198,6 @@ class RestaurantServiceImplTest {
 
         verify(restaurantRepository, times(1)).findById(restaurantId);
         verify(restaurantRepository, times(1)).save(any(Restaurant.class));
-        verify(eventPublisher, times(1)).publishRestaurantUpdated(any(Restaurant.class));
     }
 
     @Test
@@ -218,7 +212,6 @@ class RestaurantServiceImplTest {
         // Assert
         verify(restaurantRepository, times(1)).existsById(restaurantId);
         verify(restaurantRepository, times(1)).deleteById(restaurantId);
-        verify(eventPublisher, times(1)).publishRestaurantDeleted(restaurantId);
     }
 
     @Test
@@ -234,7 +227,6 @@ class RestaurantServiceImplTest {
 
         verify(restaurantRepository, times(1)).existsById(nonExistentId);
         verify(restaurantRepository, never()).deleteById(any());
-        verify(eventPublisher, never()).publishRestaurantDeleted(any());
     }
 
     @Test

@@ -31,8 +31,6 @@ server:
 app:
   internal:
     gateway-secret: ${INTERNAL_GATEWAY_SECRET:test-gateway-secret}
-  kafka:
-    enabled: false
 
 eureka:
   client:
