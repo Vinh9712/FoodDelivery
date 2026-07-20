@@ -43,6 +43,10 @@ public class ManageAddressUseCaseImpl implements ManageAddressUseCase {
         Customer customer = customerRepository.findByAuthUserId(command.authUserId())
                 .orElseThrow(() -> new NotFoundException("Customer profile not found"));
 
+        if (command.defaultAddress() || customer.getActiveAddresses().isEmpty()) {
+            customerRepository.unsetDefaultAddresses(customer.getId());
+        }
+
         Address address = customer.addAddress(
                 command.label(),
                 command.addressLine(),
@@ -63,6 +67,10 @@ public class ManageAddressUseCaseImpl implements ManageAddressUseCase {
     public AddressResponse updateAddress(UpdateAddressCommand command) {
         Customer customer = customerRepository.findByAuthUserId(command.authUserId())
                 .orElseThrow(() -> new NotFoundException("Customer profile not found"));
+
+        if (command.defaultAddress()) {
+            customerRepository.unsetDefaultAddresses(customer.getId());
+        }
 
         Address address = customer.updateAddress(
                 command.addressId(),
@@ -85,6 +93,8 @@ public class ManageAddressUseCaseImpl implements ManageAddressUseCase {
     public AddressResponse setDefaultAddress(SetDefaultAddressCommand command) {
         Customer customer = customerRepository.findByAuthUserId(command.authUserId())
                 .orElseThrow(() -> new NotFoundException("Customer profile not found"));
+
+        customerRepository.unsetDefaultAddresses(customer.getId());
 
         try {
             customer.setDefaultAddress(command.addressId());

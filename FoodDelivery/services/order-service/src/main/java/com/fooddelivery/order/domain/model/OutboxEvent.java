@@ -13,14 +13,7 @@ import java.util.UUID;
 
 import com.fooddelivery.order.domain.util.UuidCreator;
 
-/**
- * Transactional Outbox Pattern entity.
- * <p>
- * Domain changes write an {@code OutboxEvent} in the same DB transaction.
- * {@code OrderOutboxPublisher} relays unpublished events to Kafka with retry
- * and dead-letter support.
- * </p>
- */
+
 @Entity
 @Table(name = "outbox_events")
 @Getter

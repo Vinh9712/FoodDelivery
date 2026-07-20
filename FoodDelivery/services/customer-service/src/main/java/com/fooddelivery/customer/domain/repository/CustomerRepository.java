@@ -8,4 +8,5 @@ public interface CustomerRepository {
     Customer save(Customer customer);
     Optional<Customer> findById(UUID id);
     Optional<Customer> findByAuthUserId(UUID authUserId);
+    void unsetDefaultAddresses(UUID customerId);
 }

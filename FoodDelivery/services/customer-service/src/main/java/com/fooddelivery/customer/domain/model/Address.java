@@ -34,6 +34,10 @@ public class Address extends BaseEntity {
     @Column(name = "city", nullable = false, length = 100)
     private String city;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "customer_id", nullable = false)
+    private Customer customer;
+
     @Column(name = "latitude", precision = 10, scale = 8)
     private BigDecimal latitude;
 
@@ -42,23 +46,22 @@ public class Address extends BaseEntity {
 
     @Column(name = "is_default", nullable = false)
     private boolean defaultAddress;
-    @PrePersist
-    private void ensureId() {
-        if (id == null) {
-            id = UuidCreator.getTimeOrderedEpoch();
-        }
-    }
-    public static Address create(String label, String addressLine, String district,
+    public static Address create(Customer customer, String label, String addressLine, String district,
                                  String city, BigDecimal latitude, BigDecimal longitude, boolean defaultAddress) {
-        return create(label, addressLine, district, city, GeoLocation.ofNullable(latitude, longitude), defaultAddress);
+        return create(customer, label, addressLine, district, city, GeoLocation.ofNullable(latitude, longitude), defaultAddress);
     }
 
-    public static Address create(String label, String addressLine, String district,
+    public static Address create(Customer customer, String label, String addressLine, String district,
                                  String city, GeoLocation location, boolean defaultAddress) {
+        if (customer == null) {
+            throw new IllegalArgumentException("customer is required");
+        }
         if (isBlank(addressLine) || isBlank(city)) {
             throw new IllegalArgumentException("addressLine and city are required");
         }
         Address address = new Address();
+        address.id = UuidCreator.getTimeOrderedEpoch();
+        address.customer = customer;
         address.label = label;
         address.addressLine = addressLine.trim();
         address.district = district;

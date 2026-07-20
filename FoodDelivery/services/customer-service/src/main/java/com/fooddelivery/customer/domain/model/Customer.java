@@ -50,8 +50,7 @@ public class Customer extends BaseEntity {
     @Column(name = "loyalty_points", nullable = false)
     private int loyaltyPoints;
 
-    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @JoinColumn(name = "customer_id")
+    @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private final List<Address> addresses = new ArrayList<>();
 
     @PrePersist
@@ -113,7 +112,7 @@ public class Customer extends BaseEntity {
         if (makeDefault) {
             activeAddresses().forEach(Address::unsetDefault);
         }
-        Address address = Address.create(label, addressLine, district, city, latitude, longitude, makeDefault);
+        Address address = Address.create(this, label, addressLine, district, city, latitude, longitude, makeDefault);
         addresses.add(address);
         return address;
     }

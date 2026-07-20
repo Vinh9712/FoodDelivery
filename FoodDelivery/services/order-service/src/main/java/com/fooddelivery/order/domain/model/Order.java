@@ -218,9 +218,7 @@ public class Order {
         return order;
     }
 
-    /**
-     * Legacy constructor — giữ backward compatibility.
-     */
+
     public Order(UUID customerId, UUID restaurantId, BigDecimal totalAmount) {
         this.id = UuidCreator.nextUuidV7();
         this.customerId = customerId;
@@ -235,19 +233,7 @@ public class Order {
         this.updatedAt = this.createdAt;
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // DOMAIN BEHAVIORS — State Machine Invariants
-    // ══════════════════════════════════════════════════════════════════════
 
-    /**
-     * Thêm một dòng hàng vào đơn.
-     * <p>
-     * Tự động tính subtotal cho dòng hàng (unitPrice × quantity),
-     * cộng dồn vào subtotal của Order, và tính lại totalAmount.
-     * </p>
-     *
-     * @throws IllegalStateException nếu đơn hàng không ở trạng thái PENDING
-     */
     public void addItem(UUID menuItemId, String itemName, String description,
                         BigDecimal unitPrice, int quantity) {
         if (this.status != OrderStatus.PENDING) {
@@ -275,14 +261,6 @@ public class Order {
         this.updatedAt = Instant.now();
     }
 
-    /**
-     * Chuyển trạng thái đơn hàng sang PAID.
-     * <p>
-     * Chỉ cho phép từ PENDING. Ghi nhận lịch sử và outbox event.
-     * </p>
-     *
-     * @throws IllegalStateException nếu trạng thái hiện tại không phải PENDING
-     */
     public void markAsPaid() {
         if (this.status != OrderStatus.PENDING) {
             throw new IllegalStateException(
@@ -292,15 +270,7 @@ public class Order {
         transitionWithOutbox(OrderStatus.PENDING, OrderStatus.CONFIRMED, "Thanh toán thành công", null);
     }
 
-    /**
-     * Gán tài xế cho đơn hàng (Saga flow — nhận driverId từ Delivery Service).
-     * <p>
-     * Ném lỗi nếu đơn hàng chưa được thanh toán thành công (status phải là PAID trở lên).
-     * </p>
-     *
-     * @param driverId ID tài xế được phân bổ
-     * @throws IllegalStateException nếu đơn hàng chưa thanh toán
-     */
+
     public void assignDriver(UUID driverId) {
         if (this.status == OrderStatus.PENDING) {
             throw new IllegalStateException(
@@ -320,9 +290,6 @@ public class Order {
         ));
     }
 
-    /**
-     * Gán tài xế bằng AssignedDriverInfo snapshot (backward compatible).
-     */
     public void assignDriver(AssignedDriverInfo driverInfo) {
         if (this.status == OrderStatus.PENDING) {
             throw new InvalidOrderStateException(
@@ -416,9 +383,6 @@ public class Order {
         this.updatedAt = Instant.now();
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // QUERY METHODS
-    // ══════════════════════════════════════════════════════════════════════
 
     public Optional<AssignedDriverInfo> getAssignedDriver() {
         return Optional.ofNullable(assignedDriverSnapshot);
@@ -440,18 +404,13 @@ public class Order {
         return new Money(this.totalAmount);
     }
 
-    /**
-     * Trả về delivery address dưới dạng JSON string.
-     */
+
     public String getDeliveryAddressJson() {
         if (deliveryAddressSnapshot == null) return null;
         return deliveryAddressSnapshot.addressLine();
     }
 
-    /**
-     * Lấy danh sách outbox event chờ persist.
-     * Sau khi persist xong, gọi {@link #clearPendingOutboxEvents()}.
-     */
+
     public List<OutboxEvent> getPendingOutboxEvents() {
         return Collections.unmodifiableList(pendingOutboxEvents);
     }
@@ -460,9 +419,6 @@ public class Order {
         pendingOutboxEvents.clear();
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // PRIVATE HELPERS
-    // ══════════════════════════════════════════════════════════════════════
 
     /** Tính lại totalAmount = subtotal + deliveryFee - discountAmount */
     private void recalculateTotal() {

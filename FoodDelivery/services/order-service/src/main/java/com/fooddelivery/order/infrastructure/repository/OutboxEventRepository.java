@@ -17,32 +17,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/**
- * Outbox repository for durable Kafka relay.
- * <p>
- * Due-id queries are batched (never load the full backlog). Publish path uses
- * pessimistic write with {@code SKIP LOCKED} so multiple relay instances can
- * run safely.
- * </p>
- */
+
 @Repository
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> {
 
-    /**
-     * Legacy helper — unpublished events only (no due-time filter).
-     */
     List<OutboxEvent> findByPublishedAtIsNullOrderByCreatedAtAsc();
 
     List<OutboxEvent> findByAggregateTypeAndAggregateId(String aggregateType, UUID aggregateId);
 
-    /**
-     * Batch of due unpublished event IDs (not dead-lettered, retry time reached).
-     * <p>
-     * Only the head of each aggregate's unpublished chain is eligible so later
-     * events (e.g. {@code OrderCancelled}) cannot overtake an earlier failed/
-     * locked event (e.g. {@code OrderCreated}) on the same aggregate.
-     * </p>
-     */
     @Query("""
             select event.id from OutboxEvent event
             where event.publishedAt is null
@@ -63,10 +45,6 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
             """)
     List<UUID> findDueEventIds(@Param("now") Instant now, Pageable pageable);
 
-    /**
-     * Lock a single event for exclusive publish. {@code SKIP LOCKED} so another
-     * replica processing the same id does not block.
-     */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints(@QueryHint(name = SpecHints.HINT_SPEC_LOCK_TIMEOUT, value = "-2"))
     @Query("select event from OutboxEvent event where event.id = :eventId")

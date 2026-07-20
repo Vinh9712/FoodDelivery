@@ -49,10 +49,6 @@ public class OrderOutboxPublisher {
         this.maxAttempts = maxAttempts;
     }
 
-    /**
-     * Publish a single due outbox event in its own transaction (REQUIRES_NEW).
-     * Waits for broker ACK before marking published.
-     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void publishOne(UUID eventId) {
         OutboxEvent event = outboxEventRepository.findByIdForUpdate(eventId).orElse(null);
