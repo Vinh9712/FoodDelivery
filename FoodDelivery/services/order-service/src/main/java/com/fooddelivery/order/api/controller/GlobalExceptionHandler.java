@@ -5,6 +5,8 @@ import com.fooddelivery.order.domain.exception.InvalidOrderRequestException;
 import com.fooddelivery.order.domain.exception.OrderDependencyException;
 import com.fooddelivery.order.domain.exception.OrderNotFoundException;
 import feign.FeignException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -17,6 +19,8 @@ import java.net.URI;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(OrderNotFoundException.class)
     public ProblemDetail handleOrderNotFound(OrderNotFoundException ex) {
@@ -52,26 +56,17 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(FeignException.class)
     public ProblemDetail handleFeignException(FeignException ex) {
-        HttpStatus status = HttpStatus.resolve(ex.status()) != null 
-                ? HttpStatus.valueOf(ex.status()) 
-                : HttpStatus.BAD_GATEWAY;
+        HttpStatus status = HttpStatus.resolve(ex.status());
+        if (status == null) {
+            status = HttpStatus.BAD_GATEWAY;
+        }
+        log.warn("Downstream microservice call failed with status {}", ex.status(), ex);
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                status, 
-                "Downstream microservice call failed: " + ex.getMessage()
+                status,
+                "Downstream microservice call failed"
         );
         problem.setTitle("Microservice Communication Error");
         problem.setType(URI.create("https://api.fooddelivery.com/errors/microservice-communication-failure"));
-        return problem;
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ProblemDetail handleGeneralException(Exception ex) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.INTERNAL_SERVER_ERROR, 
-                "An unexpected internal error occurred: " + ex.getMessage()
-        );
-        problem.setTitle("Internal Server Error");
-        problem.setType(URI.create("https://api.fooddelivery.com/errors/internal-server-error"));
         return problem;
     }
 }
