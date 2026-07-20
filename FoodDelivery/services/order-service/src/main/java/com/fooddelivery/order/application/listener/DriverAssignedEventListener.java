@@ -16,10 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Consumes {@code driver.assigned} events from Delivery Service.
- * Follows the Idempotent Consumer pattern via {@code processed_events} table.
- */
+
 @Component
 @RequiredArgsConstructor
 @Slf4j

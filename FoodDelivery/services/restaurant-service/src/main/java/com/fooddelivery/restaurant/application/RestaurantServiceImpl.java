@@ -118,10 +118,10 @@ public class RestaurantServiceImpl implements RestaurantService {
                 request.getSize() != null ? request.getSize() : 10
         );
 
-        String status = null;
+        RestaurantStatus status = null;
         if (request.getStatus() != null) {
             try {
-                status = request.getStatus().toUpperCase();
+                status = RestaurantStatus.valueOf(request.getStatus().toUpperCase());
             } catch (IllegalArgumentException e) {
                 // Invalid status, ignore
             }

@@ -1,7 +1,6 @@
 # Customer Service – overrides on top of the shared application.yaml.
 server:
   port: 8081
-  forward-headers-strategy: framework
 
 spring:
   datasource:
@@ -26,10 +25,10 @@ spring:
       group-id: customer-service
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.fooddelivery.customer.*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-
-app:
-  internal:
-    gateway-secret: ${INTERNAL_GATEWAY_SECRET}
-    gateway-filter-enabled: false
-

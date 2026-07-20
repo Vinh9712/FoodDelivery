@@ -12,15 +12,7 @@ import org.springframework.stereotype.Component;
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * Polls due order outbox events in small batches and delegates publish to
- * {@link OrderOutboxPublisher}. Safe under multi-replica deployment because
- * each event is locked with SKIP LOCKED inside the publisher.
- * <p>
- * Due selection is restricted to the head unpublished event per aggregate so
- * per-aggregate ordering is preserved even when earlier events fail/retry.
- * </p>
- */
+
 @Component
 @RequiredArgsConstructor
 @ConditionalOnProperty(

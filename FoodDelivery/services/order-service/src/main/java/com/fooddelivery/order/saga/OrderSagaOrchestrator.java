@@ -22,24 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Saga Orchestrator điều phối luồng đặt hàng phân tán.
- * <p>
- * Luồng chính:
- * <pre>
- *   1. Tạo Order (PENDING) → save vào DB
- *   2. Gọi Payment Service
- *      ├─ SUCCESS → markAsPaid() → gọi Delivery Service
- *      │              ├─ ASSIGNED → assignDriver() → gửi notification thành công
- *      │              └─ FAILED   → refund() → cancel("Lỗi phân bổ giao vận") → notify hủy
- *      └─ FAILED  → cancel("Thanh toán thất bại") → notify lỗi
- * </pre>
- * </p>
- * <p>
- * Virtual Threads (Java 21) được kích hoạt toàn cục qua {@code spring.threads.virtual.enabled: true},
- * giúp các cuộc gọi mạng đồng bộ qua Feign không chặn luồng OS vật lý đắt đỏ.
- * </p>
- */
+
 @Service
 public class OrderSagaOrchestrator {
 
@@ -75,15 +58,7 @@ public class OrderSagaOrchestrator {
         this.deliveryFee = deliveryFee;
     }
 
-    /**
-     * Điều phối toàn bộ luồng đặt hàng theo Saga pattern.
-     *
-     * @param customerId      ID khách hàng
-     * @param restaurantId    ID nhà hàng
-     * @param deliveryAddress Địa chỉ giao hàng (JSON string)
-     * @param requestedItems  Danh sách menu item và số lượng do client yêu cầu
-     * @return Order sau khi hoàn tất saga (PAID hoặc CANCELLED)
-     */
+
     public Order placeOrder(UUID customerId, UUID restaurantId,
                             String deliveryAddress,
                             List<RequestedItem> requestedItems) {
@@ -104,7 +79,7 @@ public class OrderSagaOrchestrator {
                     : existing;
         }
 
-        log.info("🚀 Bắt đầu Saga đặt hàng: customerId={}, restaurantId={}", customerId, restaurantId);
+        log.info(" Bắt đầu Saga đặt hàng: customerId={}, restaurantId={}", customerId, restaurantId);
 
         List<OrderItemInput> pricedItems = quoteAndValidateItems(restaurantId, requestedItems);
 
@@ -112,14 +87,14 @@ public class OrderSagaOrchestrator {
         Order order = createPendingOrder(customerId, restaurantId, deliveryAddress,
                 deliveryFee, BigDecimal.ZERO, clientRequestId, pricedItems);
 
-        log.info("📝 Đơn hàng PENDING đã tạo: orderId={}, totalAmount={}",
+        log.info(" Đơn hàng PENDING đã tạo: orderId={}, totalAmount={}",
                 order.getId(), order.getTotalAmount());
 
         // ── BƯỚC 2: Gọi Payment Service ──
         var paymentRequest = new PaymentRequest(
                 order.getId(), order.getCustomerId(), order.getTotalAmount());
 
-        log.info("💳 Gọi Payment Service: orderId={}, amount={}", order.getId(), order.getTotalAmount());
+        log.info(" Gọi Payment Service: orderId={}, amount={}", order.getId(), order.getTotalAmount());
         PaymentResponse paymentResponse;
         try {
             paymentResponse = paymentClient.processPayment(paymentIdempotencyKey(order), paymentRequest);
@@ -173,19 +148,13 @@ public class OrderSagaOrchestrator {
             case "REFUNDED" -> handlePaymentFailure(order, "Payment was already refunded");
             case "PENDING", "PROCESSING", "UNKNOWN" -> order;
             default -> {
-                log.warn("⚠️ Trạng thái thanh toán không xác định: {}", paymentResponse.status());
+                log.warn("️ Trạng thái thanh toán không xác định: {}", paymentResponse.status());
                 yield order;
             }
         };
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // PRIVATE — Các bước trong Saga
-    // ══════════════════════════════════════════════════════════════════════
 
-    /**
-     * Bước 1: Tạo Order PENDING và lưu vào DB trong một transaction.
-     */
     protected Order createPendingOrder(UUID customerId, UUID restaurantId,
                                        String deliveryAddress, BigDecimal deliveryFee,
                                        BigDecimal discountAmount,
@@ -215,7 +184,7 @@ public class OrderSagaOrchestrator {
      * Thanh toán thành công → markAsPaid → gọi Delivery Service.
      */
     private Order handlePaymentSuccess(Order order, PaymentResponse paymentResponse) {
-        log.info("✅ Thanh toán thành công: orderId={}, transactionId={}",
+        log.info(" Thanh toán thành công: orderId={}, transactionId={}",
                 order.getId(), paymentResponse.transactionId());
 
         // Cập nhật trạng thái PAID
@@ -225,12 +194,12 @@ public class OrderSagaOrchestrator {
         var deliveryRequest = new DeliveryRequest(
                 order.getId(), order.getCustomerId(), order.getDeliveryAddressJson());
 
-        log.info("🚚 Gọi Delivery Service: orderId={}", order.getId());
+        log.info(" Gọi Delivery Service: orderId={}", order.getId());
         DeliveryResponse deliveryResponse;
         try {
             deliveryResponse = deliveryClient.scheduleDelivery(deliveryRequest);
         } catch (Exception e) {
-            log.error("❌ Lỗi kết nối Delivery Service: {}", e.getMessage());
+            log.error(" Lỗi kết nối Delivery Service: {}", e.getMessage());
             return handleDeliveryFailure(order, "Lỗi kết nối dịch vụ giao vận: " + e.getMessage());
         }
 
@@ -240,7 +209,7 @@ public class OrderSagaOrchestrator {
             case "FINDING_DRIVER" -> order;
             case "FAILED"   -> handleDeliveryFailure(order, deliveryResponse.message());
             default -> {
-                log.warn("⚠️ Trạng thái giao vận không xác định: {}", deliveryResponse.status());
+                log.warn(" Trạng thái giao vận không xác định: {}", deliveryResponse.status());
                 yield handleDeliveryFailure(order, "Trạng thái giao vận không xác định");
             }
         };
@@ -250,7 +219,7 @@ public class OrderSagaOrchestrator {
      * Thanh toán thất bại → cancel đơn hàng → gửi thông báo lỗi.
      */
     private Order handlePaymentFailure(Order order, String reason) {
-        log.warn("❌ Thanh toán thất bại: orderId={}, reason={}", order.getId(), reason);
+        log.warn(" Thanh toán thất bại: orderId={}, reason={}", order.getId(), reason);
 
         order = cancelOrder(order, "Thanh toán thất bại");
 
@@ -265,7 +234,7 @@ public class OrderSagaOrchestrator {
      * Giao vận thành công → assignDriver → gửi thông báo hoàn tất.
      */
     private Order handleDeliverySuccess(Order order, DeliveryResponse deliveryResponse) {
-        log.info("✅ Phân bổ tài xế thành công: orderId={}, driverId={}",
+        log.info(" Phân bổ tài xế thành công: orderId={}, driverId={}",
                 order.getId(), deliveryResponse.driverId());
 
         order = assignDriverToOrder(order, deliveryResponse.driverId());
@@ -275,7 +244,7 @@ public class OrderSagaOrchestrator {
                 "Đơn hàng " + order.getId() + " đã được thanh toán và tài xế " +
                         deliveryResponse.driverId() + " đang trên đường giao hàng.");
 
-        log.info("🎉 Saga hoàn tất thành công: orderId={}", order.getId());
+        log.info(" Saga hoàn tất thành công: orderId={}", order.getId());
         return order;
     }
 
@@ -286,15 +255,15 @@ public class OrderSagaOrchestrator {
      *   3. Gửi thông báo hủy
      */
     private Order handleDeliveryFailure(Order order, String reason) {
-        log.warn("❌ Giao vận thất bại: orderId={}, reason={}", order.getId(), reason);
+        log.warn(" Giao vận thất bại: orderId={}, reason={}", order.getId(), reason);
 
         // ── Compensating: Hoàn tiền ──
         try {
             var refundRequest = new RefundRequest(order.getId(), order.getTotalAmount());
             var refundResponse = paymentClient.refundPayment(refundRequest);
-            log.info("💰 Hoàn tiền thành công: orderId={}, status={}", order.getId(), refundResponse.status());
+            log.info(" Hoàn tiền thành công: orderId={}, status={}", order.getId(), refundResponse.status());
         } catch (Exception e) {
-            log.error("❌ Lỗi hoàn tiền: orderId={}, error={}", order.getId(), e.getMessage());
+            log.error(" Lỗi hoàn tiền: orderId={}, error={}", order.getId(), e.getMessage());
             // Ghi nhận lỗi hoàn tiền nhưng vẫn tiếp tục hủy đơn
         }
 
@@ -306,7 +275,7 @@ public class OrderSagaOrchestrator {
                 "Đơn hàng " + order.getId() + " đã bị hủy do: " + reason +
                         ". Số tiền " + order.getTotalAmount() + " VND đã được hoàn lại.");
 
-        log.info("🔄 Saga compensating hoàn tất: orderId={}", order.getId());
+        log.info(" Saga compensating hoàn tất: orderId={}", order.getId());
         return order;
     }
 
@@ -363,9 +332,9 @@ public class OrderSagaOrchestrator {
             var request = new NotificationRequest(
                     order.getId(), order.getCustomerId(), "IN_APP", subject, message);
             notificationClient.sendNotification(request);
-            log.info("📧 Thông báo đã gửi: orderId={}, subject={}", order.getId(), subject);
+            log.info(" Thông báo đã gửi: orderId={}, subject={}", order.getId(), subject);
         } catch (Exception e) {
-            log.warn("⚠️ Gửi thông báo thất bại (non-critical): orderId={}, error={}",
+            log.warn(" Gửi thông báo thất bại (non-critical): orderId={}, error={}",
                     order.getId(), e.getMessage());
         }
     }

@@ -26,7 +26,7 @@ public interface RestaurantRepository extends JpaRepository<Restaurant, UUID> {
             @Param("name") String name,
             @Param("city") String city,
             @Param("district") String district,
-            @Param("status") String status,
+            @Param("status") RestaurantStatus status,
             @Param("minRating") BigDecimal minRating,
             Pageable pageable
     );

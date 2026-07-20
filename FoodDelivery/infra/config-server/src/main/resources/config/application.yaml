@@ -1,8 +1,4 @@
-# =====================================================================
-# SHARED configuration served by Config Server to ALL services.
-# Anything here is inherited by every config client. Override per
-# service in <service-name>.yaml (e.g. order-service.yaml).
-# =====================================================================
+
 
 eureka:
   client:
