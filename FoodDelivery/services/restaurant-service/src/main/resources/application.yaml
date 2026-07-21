@@ -24,3 +24,27 @@ logging:
   level:
     com.fooddelivery.restaurant: INFO
     com.netflix.eureka: DEBUG
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      restaurantService:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+  retry:
+    instances:
+      restaurantService:
+        max-attempts: 3
+        wait-duration: 2s
+  timelimiter:
+    instances:
+      restaurantService:
+        timeout-duration: 5s
+
+  app:
+    jwt:
+      secret: ${JWT_SECRET:mySecretKey123456789012345678901234567890}
+      expiration-ms: ${JWT_EXPIRATION_MS:86400000}
