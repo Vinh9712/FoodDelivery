@@ -140,6 +140,33 @@ public class RestaurantServiceImpl implements RestaurantService {
         return page.map(this::mapToResponse);
     }
 
+    @Override
+    public RestaurantResponse setAvailability(UUID id, boolean accepting) {
+        Restaurant restaurant = findRestaurant(id);
+        restaurant.setAcceptingOrders(accepting);
+        return mapToResponse(restaurantRepository.save(restaurant));
+    }
+
+    @Override
+    public RestaurantResponse changeStatus(UUID id, RestaurantStatus status) {
+        Restaurant restaurant = findRestaurant(id);
+        restaurant.changeStatus(status);
+        return mapToResponse(restaurantRepository.save(restaurant));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isOwner(UUID restaurantId, UUID userId) {
+        return restaurantRepository.findById(restaurantId)
+                .map(restaurant -> java.util.Objects.equals(restaurant.getOwnerId(), userId))
+                .orElseThrow(() -> new RestaurantNotFoundException("Restaurant not found with ID: " + restaurantId));
+    }
+
+    private Restaurant findRestaurant(UUID id) {
+        return restaurantRepository.findById(id)
+                .orElseThrow(() -> new RestaurantNotFoundException("Restaurant not found with ID: " + id));
+    }
+
     private RestaurantResponse mapToResponse(Restaurant restaurant) {
         return RestaurantResponse.builder()
                 .id(restaurant.getId())

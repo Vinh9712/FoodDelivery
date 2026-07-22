@@ -1,14 +1,25 @@
 package com.fooddelivery.order.infrastructure.client.dto;
 
+import com.fooddelivery.order.application.RestaurantOrderService;
+import com.fooddelivery.order.domain.model.valueobject.DeliveryAddressSnapshot;
+import com.fooddelivery.order.domain.model.valueobject.PickupAddressSnapshot;
+
 import java.util.UUID;
 
-/** Request gửi đến Delivery Service để lập lịch giao vận. */
+/** Request body for Delivery Service schedule after READY_FOR_PICKUP. */
 public record DeliveryRequest(
         UUID orderId,
         UUID customerId,
-        String deliveryAddressSnapshot
+        UUID restaurantId,
+        PickupAddressSnapshot pickupAddressSnapshot,
+        DeliveryAddressSnapshot dropoffAddressSnapshot
 ) {
-    public DeliveryRequest(UUID orderId, String deliveryAddressSnapshot) {
-        this(orderId, null, deliveryAddressSnapshot);
+    public static DeliveryRequest from(RestaurantOrderService.OrderReadyForPickup event) {
+        return new DeliveryRequest(
+                event.orderId(),
+                event.customerId(),
+                event.restaurantId(),
+                event.pickup(),
+                event.dropoff());
     }
 }

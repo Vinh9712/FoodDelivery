@@ -2,7 +2,32 @@
 server:
   port: 8083
 
+order:
+  restaurant-acceptance-timeout: ${ORDER_RESTAURANT_ACCEPTANCE_TIMEOUT:10m}
+  restaurant-acceptance-timeout-scheduler:
+    enabled: ${ORDER_RESTAURANT_ACCEPTANCE_TIMEOUT_SCHEDULER_ENABLED:true}
+    scan-interval: ${ORDER_RESTAURANT_ACCEPTANCE_TIMEOUT_SCAN_INTERVAL:15s}
+    batch-size: ${ORDER_RESTAURANT_ACCEPTANCE_TIMEOUT_BATCH_SIZE:50}
+  delivery-reconciliation:
+    enabled: ${ORDER_DELIVERY_RECONCILIATION_ENABLED:true}
+    scan-interval: ${ORDER_DELIVERY_RECONCILIATION_SCAN_INTERVAL:30s}
+    initial-backoff: ${ORDER_DELIVERY_RECONCILIATION_INITIAL_BACKOFF:30s}
+    max-backoff: ${ORDER_DELIVERY_RECONCILIATION_MAX_BACKOFF:5m}
+    attention-attempts: ${ORDER_DELIVERY_RECONCILIATION_ATTENTION_ATTEMPTS:8}
+    batch-size: ${ORDER_DELIVERY_RECONCILIATION_BATCH_SIZE:50}
+  refund-reconciliation:
+    enabled: ${ORDER_REFUND_RECONCILIATION_ENABLED:true}
+    scan-interval: ${ORDER_REFUND_RECONCILIATION_SCAN_INTERVAL:30s}
+    initial-backoff: ${ORDER_REFUND_RECONCILIATION_INITIAL_BACKOFF:30s}
+    max-backoff: ${ORDER_REFUND_RECONCILIATION_MAX_BACKOFF:30m}
+    max-attempts: ${ORDER_REFUND_RECONCILIATION_MAX_ATTEMPTS:8}
+    batch-size: ${ORDER_REFUND_RECONCILIATION_BATCH_SIZE:50}
+
 app:
+  reliability:
+    relay-batch-size: ${ORDER_RELAY_BATCH_SIZE:50}
+    relay-ack-timeout: ${ORDER_RELAY_ACK_TIMEOUT:10s}
+    deferred-scan-delay: ${ORDER_INBOX_DEFERRED_SCAN_DELAY:15s}
   order:
     pricing:
       delivery-fee: ${ORDER_DELIVERY_FEE:15000}
@@ -17,6 +42,19 @@ app:
         retry-base-delay: ${ORDER_OUTBOX_RETRY_BASE_DELAY:5s}
         retry-max-delay: ${ORDER_OUTBOX_RETRY_MAX_DELAY:5m}
         max-attempts: ${ORDER_OUTBOX_MAX_ATTEMPTS:10}
+    inbox:
+      deferred-drain:
+        enabled: ${ORDER_INBOX_DEFERRED_DRAIN_ENABLED:true}
+      deferred-scan-delay: ${ORDER_INBOX_DEFERRED_SCAN_DELAY:15s}
+      gap-window: ${ORDER_INBOX_GAP_WINDOW:10m}
+      initial-backoff: ${ORDER_INBOX_INITIAL_BACKOFF:5s}
+      max-backoff: ${ORDER_INBOX_MAX_BACKOFF:1m}
+      deferred-batch-size: ${ORDER_INBOX_DEFERRED_BATCH_SIZE:50}
+      dlt-topic: ${ORDER_INBOX_DLT_TOPIC:delivery.events.v1.DLT}
+    kafka:
+      order-events-topic: ${ORDER_EVENTS_TOPIC:order.events.v1}
+      delivery-events-topic: ${DELIVERY_EVENTS_TOPIC:delivery.events.v1}
+      payment-events-topic: ${PAYMENT_EVENTS_TOPIC:payment.events.v1}
 
 spring:
   datasource:
@@ -41,11 +79,12 @@ spring:
       group-id: order-service
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      properties:
-        spring.json.trusted.packages: "com.fooddelivery.order.*,java.util"
-        spring.json.use.type.headers: false
-        spring.json.value.default.type: java.util.Map
+      # Raw JSON string payloads — DeliveryLifecycleEventListener parses IntegrationEventEnvelope explicitly
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
     producer:
+      acks: all
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5

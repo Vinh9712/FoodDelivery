@@ -1,6 +1,9 @@
 package com.fooddelivery.delivery.application.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fooddelivery.delivery.api.dto.DeliveryRequest;
+import com.fooddelivery.delivery.domain.exception.DeliveryNotFoundException;
+import com.fooddelivery.delivery.domain.exception.DeliveryScheduleConflictException;
 import com.fooddelivery.delivery.domain.model.Delivery;
 import com.fooddelivery.delivery.domain.model.Driver;
 import com.fooddelivery.delivery.domain.model.valueobject.DeliveryStatus;
@@ -17,10 +20,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Duration;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -35,13 +40,19 @@ class DeliveryAssignmentServiceIntegrationTest {
         }
 
         @Bean
+        Clock clock() {
+            return Clock.systemUTC();
+        }
+
+        @Bean
         DeliveryAssignmentService deliveryAssignmentService(
                 DeliveryRepository deliveryRepository,
                 DriverRepository driverRepository,
                 OutboxEventRepository outboxEventRepository,
-                ObjectMapper objectMapper) {
+                ObjectMapper objectMapper,
+                Clock clock) {
             return new DeliveryAssignmentService(
-                    deliveryRepository, driverRepository, outboxEventRepository, objectMapper,
+                    deliveryRepository, driverRepository, outboxEventRepository, objectMapper, clock,
                     Duration.ofSeconds(1), Duration.ofSeconds(10), 3);
         }
     }
@@ -67,13 +78,14 @@ class DeliveryAssignmentServiceIntegrationTest {
     void scheduleDeliveryPersistsAssignmentAndIsIdempotent() {
         Driver driver = onlineDriver("Driver One", "0900000001", "59A1-00001");
         UUID orderId = UUID.randomUUID();
+        DeliveryRequest request = request(orderId, "12 Le Loi", "123 Nguyen Trai");
+        String key = key(orderId);
 
-        DeliveryAssignmentService.AssignmentResult first = assignmentService.scheduleDelivery(
-                orderId, "123 Nguyen Trai, District 1");
-        DeliveryAssignmentService.AssignmentResult duplicate = assignmentService.scheduleDelivery(
-                orderId, "123 Nguyen Trai, District 1");
+        DeliveryAssignmentService.AssignmentResult first = assignmentService.scheduleDelivery(key, request);
+        DeliveryAssignmentService.AssignmentResult duplicate = assignmentService.scheduleDelivery(key, request);
+        UUID secondOrderId = UUID.randomUUID();
         DeliveryAssignmentService.AssignmentResult secondOrder = assignmentService.scheduleDelivery(
-                UUID.randomUUID(), "789 Hai Ba Trung, District 3");
+                key(secondOrderId), request(secondOrderId, "99 Other", "789 Hai Ba Trung"));
 
         Delivery persisted = deliveryRepository.findByOrderId(orderId).orElseThrow();
         assertThat(first.assigned()).isTrue();
@@ -83,9 +95,39 @@ class DeliveryAssignmentServiceIntegrationTest {
         assertThat(secondOrder.assigned()).isFalse();
         assertThat(persisted.getStatus()).isEqualTo(DeliveryStatus.DRIVER_ASSIGNED);
         assertThat(persisted.getDriverId()).isEqualTo(driver.getId());
-        assertThat(persisted.getDropoffAddress().text()).isEqualTo("123 Nguyen Trai, District 1");
+        assertThat(persisted.getDropoffAddress().text()).contains("123 Nguyen Trai");
+        assertThat(persisted.getRestaurantId()).isEqualTo(request.restaurantId());
+        assertThat(persisted.getScheduleRequestHash()).isNotBlank();
+        assertThat(persisted.getScheduleIdempotencyKey()).isEqualTo(key);
         assertThat(driverRepository.findById(driver.getId()).orElseThrow().isAvailable()).isFalse();
         assertThat(outboxEventRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void duplicateScheduleWithChangedSnapshotConflicts() {
+        onlineDriver("Conflict Driver", "0900000099", "59A1-00099");
+        UUID orderId = UUID.randomUUID();
+        DeliveryRequest original = request(orderId, "12 Le Loi", "123 Nguyen Trai");
+        assignmentService.scheduleDelivery(key(orderId), original);
+
+        DeliveryRequest changed = request(orderId, "12 Le Loi", "999 Changed Street");
+
+        assertThatThrownBy(() -> assignmentService.scheduleDelivery(key(orderId), changed))
+                .isInstanceOf(DeliveryScheduleConflictException.class);
+        assertThat(deliveryRepository.findByOrderId(orderId)).hasValueSatisfying(delivery ->
+                assertThat(delivery.getDropoffAddress().text()).contains("123 Nguyen Trai"));
+    }
+
+    @Test
+    void getByOrderIdReturnsExistingOrNotFound() {
+        UUID orderId = UUID.randomUUID();
+        assertThatThrownBy(() -> assignmentService.getByOrderId(orderId))
+                .isInstanceOf(DeliveryNotFoundException.class);
+
+        assignmentService.scheduleDelivery(key(orderId), request(orderId, "Pickup", "Dropoff"));
+
+        Delivery found = assignmentService.getByOrderId(orderId);
+        assertThat(found.getOrderId()).isEqualTo(orderId);
     }
 
     @Test
@@ -93,9 +135,10 @@ class DeliveryAssignmentServiceIntegrationTest {
         Driver driver = new Driver("Offline", "0900000010", VehicleType.MOTORBIKE,
                 "59A1-00010", new BigDecimal("4.80"));
         driverRepository.save(driver);
+        UUID orderId = UUID.randomUUID();
 
         DeliveryAssignmentService.AssignmentResult result = assignmentService.scheduleDelivery(
-                UUID.randomUUID(), UUID.randomUUID(), "Addr");
+                key(orderId), request(orderId, "Pickup", "Addr"));
 
         assertThat(result.assigned()).isFalse();
         assertThat(driverRepository.findById(driver.getId()).orElseThrow().isAvailable()).isTrue();
@@ -104,11 +147,13 @@ class DeliveryAssignmentServiceIntegrationTest {
     @Test
     void twoOrdersCannotTakeSameDriver() {
         Driver driver = onlineDriver("Shared", "0900000009", "59A1-00009");
+        UUID firstOrder = UUID.randomUUID();
+        UUID secondOrder = UUID.randomUUID();
 
         DeliveryAssignmentService.AssignmentResult first = assignmentService.scheduleDelivery(
-                UUID.randomUUID(), "Addr 1");
+                key(firstOrder), request(firstOrder, "P1", "Addr 1"));
         DeliveryAssignmentService.AssignmentResult second = assignmentService.scheduleDelivery(
-                UUID.randomUUID(), "Addr 2");
+                key(secondOrder), request(secondOrder, "P2", "Addr 2"));
 
         assertThat(first.assigned()).isTrue();
         assertThat(first.driverId()).isEqualTo(driver.getId());
@@ -119,9 +164,10 @@ class DeliveryAssignmentServiceIntegrationTest {
     @Test
     void scheduleDeliveryPersistsPendingAssignmentAndCanRetryWhenDriverOnline() {
         UUID orderId = UUID.randomUUID();
+        DeliveryRequest request = request(orderId, "456 Le Loi", "456 Le Loi drop");
 
         DeliveryAssignmentService.AssignmentResult pending = assignmentService.scheduleDelivery(
-                orderId, "456 Le Loi, District 3");
+                key(orderId), request);
 
         assertThat(pending.assigned()).isFalse();
         assertThat(deliveryRepository.findByOrderId(orderId).orElseThrow().getStatus())
@@ -129,7 +175,7 @@ class DeliveryAssignmentServiceIntegrationTest {
 
         Driver driver = onlineDriver("Driver Two", "0900000002", "59A1-00002");
         DeliveryAssignmentService.AssignmentResult retried = assignmentService.scheduleDelivery(
-                orderId, "456 Le Loi, District 3");
+                key(orderId), request);
 
         assertThat(retried.assigned()).isTrue();
         assertThat(retried.deliveryId()).isEqualTo(pending.deliveryId());
@@ -138,27 +184,33 @@ class DeliveryAssignmentServiceIntegrationTest {
     }
 
     @Test
-    void scheduleDeliveryPersistsCustomerAndAddress() {
+    void scheduleDeliveryPersistsCustomerRestaurantAndAddresses() {
         UUID orderId = UUID.randomUUID();
-        UUID customerId = UUID.randomUUID();
+        DeliveryRequest request = request(orderId, "12 Le Loi", "123 Nguyen Trai");
 
-        assignmentService.scheduleDelivery(orderId, customerId, "123 Nguyen Trai");
+        assignmentService.scheduleDelivery(key(orderId), request);
 
         Delivery delivery = deliveryRepository.findByOrderId(orderId).orElseThrow();
-        assertThat(delivery.getCustomerId()).isEqualTo(customerId);
-        assertThat(delivery.getDropoffAddress().text()).isEqualTo("123 Nguyen Trai");
+        assertThat(delivery.getCustomerId()).isEqualTo(request.customerId());
+        assertThat(delivery.getRestaurantId()).isEqualTo(request.restaurantId());
+        assertThat(delivery.getPickupAddress().text()).isEqualTo("12 Le Loi");
+        assertThat(delivery.getDropoffAddress().text()).contains("123 Nguyen Trai");
     }
 
-    @Test
-    void retryBackfillsCustomerOwnershipForExistingDelivery() {
-        UUID orderId = UUID.randomUUID();
-        UUID customerId = UUID.randomUUID();
-        Delivery existing = deliveryRepository.save(new Delivery(orderId));
+    private DeliveryRequest request(UUID orderId, String pickupText, String dropoffLine) {
+        UUID restaurantId = UUID.randomUUID();
+        return new DeliveryRequest(
+                orderId,
+                UUID.randomUUID(),
+                restaurantId,
+                new DeliveryRequest.PickupAddressSnapshot(
+                        restaurantId, "Restaurant", "0901000000", pickupText, null, null),
+                new DeliveryRequest.DropoffAddressSnapshot(
+                        dropoffLine, "District 1", "HCM", null, null));
+    }
 
-        assignmentService.scheduleDelivery(orderId, customerId, "Customer address");
-
-        Delivery updated = deliveryRepository.findById(existing.getId()).orElseThrow();
-        assertThat(updated.getCustomerId()).isEqualTo(customerId);
+    private static String key(UUID orderId) {
+        return "delivery-schedule:" + orderId;
     }
 
     private Driver onlineDriver(String name, String phone, String plate) {

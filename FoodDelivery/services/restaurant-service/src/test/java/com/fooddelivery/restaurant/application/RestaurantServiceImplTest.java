@@ -303,4 +303,16 @@ class RestaurantServiceImplTest {
             Locale.setDefault(previousLocale);
         }
     }
+
+    @Test
+    void isOwnerLoadsRestaurantOnceAndComparesStoredOwner() {
+        when(restaurantRepository.findById(restaurantId)).thenReturn(Optional.of(restaurant));
+
+        assertTrue(restaurantService.isOwner(restaurantId, ownerId));
+        assertFalse(restaurantService.isOwner(restaurantId, UUID.randomUUID()));
+
+        verify(restaurantRepository, times(2)).findById(restaurantId);
+        verify(restaurantRepository, never()).existsById(any());
+        verify(restaurantRepository, never()).existsByIdAndOwnerId(any(), any());
+    }
 }

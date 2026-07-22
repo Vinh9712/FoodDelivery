@@ -52,17 +52,37 @@ class DeliveryFlywayMigrationTest {
         assertThat(columnExists("outbox_events", "dead_lettered_at")).isTrue();
         assertThat(indexExists("idx_delivery_outbox_due")).isTrue();
 
-        Flyway latest = flyway();
-        latest.migrate();
-        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("7");
+        migrateTo("7");
         assertThat(columnExists("deliveries", "assignment_attempts")).isTrue();
         assertThat(columnExists("deliveries", "next_assignment_at")).isTrue();
         assertThat(columnExists("deliveries", "customer_id")).isTrue();
         assertThat(indexExists("idx_deliveries_assignment_due")).isTrue();
 
+        migrateTo("8");
+        assertThat(flyway().info().current().getVersion().getVersion()).isEqualTo("8");
+        assertThat(columnExists("deliveries", "restaurant_id")).isTrue();
+        assertThat(columnExists("deliveries", "schedule_request_hash")).isTrue();
+        assertThat(columnExists("deliveries", "schedule_idempotency_key")).isTrue();
+        assertThat(columnExists("deliveries", "event_sequence")).isTrue();
+        assertThat(columnExists("outbox_events", "event_version")).isTrue();
+        assertThat(columnExists("outbox_events", "aggregate_sequence")).isTrue();
+        assertThat(columnExists("outbox_events", "partition_key")).isTrue();
+        assertThat(indexExists("uq_deliveries_schedule_idempotency_key")).isTrue();
+        assertThat(constraintExists("uq_delivery_outbox_aggregate_sequence")).isTrue();
+
+        Flyway latest = flyway();
+        latest.migrate();
+        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("9");
+        assertThat(indexExists("idx_delivery_outbox_due_sequence")).isTrue();
+        assertThat(constraintExists("uq_delivery_outbox_aggregate_sequence")).isTrue();
+
         assertThatCode(this::validateHibernateSchema)
-                .as("Hibernate ddl-auto=validate must succeed on schema after V7")
+                .as("Hibernate ddl-auto=validate must succeed on schema after V9")
                 .doesNotThrowAnyException();
+    }
+
+    private boolean constraintExists(String constraint) throws Exception {
+        return exists("SELECT 1 FROM pg_constraint WHERE conname = '" + constraint + "'");
     }
 
     private void migrateTo(String version) {

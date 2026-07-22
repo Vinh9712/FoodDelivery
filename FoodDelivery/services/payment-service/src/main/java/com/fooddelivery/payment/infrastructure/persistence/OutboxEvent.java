@@ -30,6 +30,15 @@ public class OutboxEvent {
     @Column(name = "event_type", nullable = false, length = 100)
     private String eventType;
 
+    @Column(name = "event_version", nullable = false)
+    private int eventVersion;
+
+    @Column(name = "aggregate_sequence", nullable = false)
+    private long aggregateSequence;
+
+    @Column(name = "partition_key", nullable = false, length = 100)
+    private String partitionKey;
+
     @Type(JsonType.class)
     @Column(name = "payload", nullable = false, columnDefinition = "jsonb")
     private JsonNode payload;
@@ -58,11 +67,33 @@ public class OutboxEvent {
     @Column(name = "dead_lettered_at")
     private Instant deadLetteredAt;
 
-    public OutboxEvent(String aggregateType, UUID aggregateId, String eventType, JsonNode payload) {
+    public OutboxEvent(
+            String aggregateType,
+            UUID aggregateId,
+            String eventType,
+            int eventVersion,
+            long aggregateSequence,
+            String partitionKey,
+            JsonNode payload) {
+        if (eventVersion != 1) {
+            throw new IllegalArgumentException("eventVersion must be 1");
+        }
+        if (aggregateSequence < 1) {
+            throw new IllegalArgumentException("aggregateSequence must be positive");
+        }
+        if (partitionKey == null || partitionKey.isBlank()) {
+            throw new IllegalArgumentException("partitionKey is required");
+        }
+        if (payload == null) {
+            throw new IllegalArgumentException("payload is required");
+        }
         this.id = UuidCreator.nextUuidV7();
         this.aggregateType = aggregateType;
         this.aggregateId = aggregateId;
         this.eventType = eventType;
+        this.eventVersion = eventVersion;
+        this.aggregateSequence = aggregateSequence;
+        this.partitionKey = partitionKey;
         this.payload = payload;
         this.occurredAt = Instant.now();
         this.published = false;
@@ -92,8 +123,13 @@ public class OutboxEvent {
         this.nextAttemptAt = null;
     }
 
+    public boolean isPublished() {
+        return publishedAt != null || published;
+    }
+
     public boolean canPublish(Instant now) {
-        return !published && !deadLettered
+        return publishedAt == null
+                && !deadLettered
                 && (nextAttemptAt == null || !nextAttemptAt.isAfter(now));
     }
 

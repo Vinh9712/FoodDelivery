@@ -1,10 +1,12 @@
 package com.fooddelivery.payment;
 
+import com.fooddelivery.commonevents.EventContracts;
 import com.fooddelivery.payment.api.dto.PaymentRequest;
 import com.fooddelivery.payment.api.dto.RefundRequest;
 import com.fooddelivery.payment.application.PaymentApplicationService;
 import com.fooddelivery.payment.domain.exception.IdempotencyKeyAlreadyUsedException;
 import com.fooddelivery.payment.domain.model.valueobject.PaymentStatus;
+import com.fooddelivery.payment.infrastructure.persistence.OutboxEvent;
 import com.fooddelivery.payment.infrastructure.repository.IdempotencyKeyRepository;
 import com.fooddelivery.payment.infrastructure.repository.OutboxEventRepository;
 import com.fooddelivery.payment.infrastructure.repository.PaymentRepository;
@@ -14,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -53,6 +56,16 @@ class PaymentApplicationServiceTests {
         assertThat(paymentRepository.count()).isEqualTo(1);
         assertThat(idempotencyKeyRepository.count()).isEqualTo(1);
         assertThat(outboxEventRepository.count()).isEqualTo(1);
+
+        OutboxEvent event = outboxEventRepository.findAll().getFirst();
+        assertThat(event.getEventType()).isEqualTo(EventContracts.PAYMENT_SUCCEEDED);
+        assertThat(event.getAggregateSequence()).isEqualTo(1L);
+        assertThat(event.getPartitionKey()).isEqualTo(request.orderId().toString());
+        assertThat(event.getEventVersion()).isEqualTo(1);
+        assertThat(event.getPayload().path("amount").asText()).isEqualTo("125000");
+        assertThat(event.getPayload().path("currency").asText()).isEqualTo("VND");
+        assertThat(paymentRepository.findByOrderId(request.orderId()).orElseThrow().getEventSequence())
+                .isEqualTo(1L);
     }
 
     @Test
@@ -86,14 +99,25 @@ class PaymentApplicationServiceTests {
         paymentService.processPayment("pay-key-5", request);
 
         var refundRequest = new RefundRequest(request.orderId(), request.amount());
-        var first = paymentService.refund(refundRequest);
-        var replay = paymentService.refund(refundRequest);
+        String key = "refund:" + request.orderId();
+        var first = paymentService.refund(key, refundRequest);
+        var replay = paymentService.refund(key, refundRequest);
 
         assertThat(first.status()).isEqualTo("REFUNDED");
         assertThat(replay.status()).isEqualTo("REFUNDED");
+        assertThat(replay.refundId()).isEqualTo(first.refundId());
+        assertThat(first.paymentId()).isNotNull();
         assertThat(paymentRepository.findByOrderId(request.orderId()).orElseThrow().getStatus())
                 .isEqualTo(PaymentStatus.REFUNDED);
         assertThat(outboxEventRepository.count()).isEqualTo(2);
+
+        List<OutboxEvent> events = outboxEventRepository.findAll();
+        assertThat(events).extracting(OutboxEvent::getAggregateSequence)
+                .containsExactlyInAnyOrder(1L, 2L);
+        assertThat(events).allMatch(e -> e.getPartitionKey().equals(request.orderId().toString()));
+        assertThat(events).filteredOn(e -> e.getEventType().equals(EventContracts.PAYMENT_REFUNDED)).hasSize(1);
+        assertThat(paymentRepository.findByOrderId(request.orderId()).orElseThrow().getEventSequence())
+                .isEqualTo(2L);
     }
 
     private PaymentRequest request(String amount) {

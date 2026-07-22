@@ -37,3 +37,6 @@ app:
       max-attempts: 3
       retry-base-delay: 1s
       retry-max-delay: 10s
+    kafka:
+      order-events-topic: order.events.v1
+      delivery-events-topic: delivery.events.v1

@@ -44,5 +44,9 @@ spring:
         spring.json.use.type.headers: false
         spring.json.value.default.type: java.util.Map
     producer:
+      acks: all
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5

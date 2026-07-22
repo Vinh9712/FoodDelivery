@@ -15,7 +15,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Ensures due-event selection only returns the head of each aggregate chain.
+ * Ensures due-event selection returns ordered heads with head-of-line blocking,
+ * including when earlier rows are delayed or dead-lettered.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -25,14 +26,50 @@ class OutboxEventRepositoryOrderingTest {
     private OutboxEventRepository outboxEventRepository;
 
     @Test
+    void sequencesForOneAggregateAreReturnedStrictlyInOrder() {
+        UUID aggregateId = UUID.randomUUID();
+        OutboxEvent first = event(aggregateId, "OrderCreated", 1L);
+        OutboxEvent second = event(aggregateId, "OrderStatusChanged", 2L);
+        OutboxEvent third = event(aggregateId, "OrderCancelled", 3L);
+        outboxEventRepository.saveAll(List.of(first, second, third));
+
+        List<UUID> due = outboxEventRepository.findDueEventIds(Instant.now(), PageRequest.of(0, 50));
+        assertThat(due).contains(first.getId());
+        assertThat(due).doesNotContain(second.getId(), third.getId());
+
+        first.markPublished();
+        outboxEventRepository.save(first);
+        due = outboxEventRepository.findDueEventIds(Instant.now(), PageRequest.of(0, 50));
+        assertThat(due).contains(second.getId());
+        assertThat(due).doesNotContain(first.getId(), third.getId());
+
+        second.markPublished();
+        outboxEventRepository.save(second);
+        due = outboxEventRepository.findDueEventIds(Instant.now(), PageRequest.of(0, 50));
+        assertThat(due).contains(third.getId());
+        assertThat(due).doesNotContain(first.getId(), second.getId());
+    }
+
+    @Test
     void findDueEventIdsOnlyReturnsHeadPerAggregateWhenEarlierEventIsBlocked() {
         UUID aggregateId = UUID.randomUUID();
-        OutboxEvent created = OutboxEvent.create(
-                "Order", aggregateId, "OrderCreated", Map.of("step", "1"));
-        OutboxEvent cancelled = OutboxEvent.create(
-                "Order", aggregateId, "OrderCancelled", Map.of("step", "2"));
-        // Block the earlier event so it is not due; later must not be selected either.
+        OutboxEvent created = event(aggregateId, "OrderCreated", 1L);
+        OutboxEvent cancelled = event(aggregateId, "OrderCancelled", 2L);
         created.recordFailure("Kafka unavailable", Instant.now().plusSeconds(300));
+        outboxEventRepository.save(created);
+        outboxEventRepository.save(cancelled);
+
+        List<UUID> due = outboxEventRepository.findDueEventIds(Instant.now(), PageRequest.of(0, 50));
+
+        assertThat(due).doesNotContain(created.getId(), cancelled.getId());
+    }
+
+    @Test
+    void deadLetteredEarlierEventBlocksLaterSibling() {
+        UUID aggregateId = UUID.randomUUID();
+        OutboxEvent created = event(aggregateId, "OrderCreated", 1L);
+        OutboxEvent cancelled = event(aggregateId, "OrderCancelled", 2L);
+        created.markDeadLettered("poison");
         outboxEventRepository.save(created);
         outboxEventRepository.save(cancelled);
 
@@ -44,10 +81,8 @@ class OutboxEventRepositoryOrderingTest {
     @Test
     void findDueEventIdsReturnsHeadWhenDueAndBlocksLaterSibling() {
         UUID aggregateId = UUID.randomUUID();
-        OutboxEvent created = OutboxEvent.create(
-                "Order", aggregateId, "OrderCreated", Map.of("step", "1"));
-        OutboxEvent cancelled = OutboxEvent.create(
-                "Order", aggregateId, "OrderCancelled", Map.of("step", "2"));
+        OutboxEvent created = event(aggregateId, "OrderCreated", 1L);
+        OutboxEvent cancelled = event(aggregateId, "OrderCancelled", 2L);
         outboxEventRepository.save(created);
         outboxEventRepository.save(cancelled);
 
@@ -60,10 +95,8 @@ class OutboxEventRepositoryOrderingTest {
     @Test
     void findDueEventIdsAllowsLaterEventAfterHeadIsPublished() {
         UUID aggregateId = UUID.randomUUID();
-        OutboxEvent created = OutboxEvent.create(
-                "Order", aggregateId, "OrderCreated", Map.of("step", "1"));
-        OutboxEvent cancelled = OutboxEvent.create(
-                "Order", aggregateId, "OrderCancelled", Map.of("step", "2"));
+        OutboxEvent created = event(aggregateId, "OrderCreated", 1L);
+        OutboxEvent cancelled = event(aggregateId, "OrderCancelled", 2L);
         created.markPublished();
         outboxEventRepository.save(created);
         outboxEventRepository.save(cancelled);
@@ -72,5 +105,32 @@ class OutboxEventRepositoryOrderingTest {
 
         assertThat(due).contains(cancelled.getId());
         assertThat(due).doesNotContain(created.getId());
+    }
+
+    @Test
+    void differentAggregateIsNotBlockedByUnpublishedHeadOnAnotherAggregate() {
+        UUID blocked = UUID.randomUUID();
+        UUID free = UUID.randomUUID();
+        OutboxEvent blockedHead = event(blocked, "OrderCreated", 1L);
+        OutboxEvent freeHead = event(free, "OrderCreated", 1L);
+        blockedHead.recordFailure("down", Instant.now().plusSeconds(300));
+        outboxEventRepository.save(blockedHead);
+        outboxEventRepository.save(freeHead);
+
+        List<UUID> due = outboxEventRepository.findDueEventIds(Instant.now(), PageRequest.of(0, 50));
+
+        assertThat(due).contains(freeHead.getId());
+        assertThat(due).doesNotContain(blockedHead.getId());
+    }
+
+    private OutboxEvent event(UUID aggregateId, String eventType, long sequence) {
+        return OutboxEvent.create(
+                "Order",
+                aggregateId,
+                eventType,
+                1,
+                sequence,
+                aggregateId.toString(),
+                Map.of("step", String.valueOf(sequence)));
     }
 }

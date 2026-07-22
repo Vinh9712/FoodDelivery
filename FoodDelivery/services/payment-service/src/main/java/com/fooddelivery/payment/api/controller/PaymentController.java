@@ -40,7 +40,9 @@ public class PaymentController {
     }
 
     @PostMapping("/refund")
-    public ResponseEntity<RefundResponse> refundPayment(@Valid @RequestBody RefundRequest request) {
-        return ResponseEntity.ok(paymentService.refund(request));
+    public ResponseEntity<RefundResponse> refundPayment(
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @Valid @RequestBody RefundRequest request) {
+        return ResponseEntity.ok(paymentService.refund(idempotencyKey, request));
     }
 }

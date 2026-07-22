@@ -25,6 +25,27 @@ class OutboxEventTest {
     }
 
     @Test
+    void retryKeepsIdentitySequenceAndSerializedPayloadStable() {
+        UUID orderId = UUID.randomUUID();
+        Map<String, Object> payload = Map.of(
+                "orderId", orderId.toString(),
+                "step", "1");
+        OutboxEvent event = OutboxEvent.create(
+                "Order", orderId, "OrderCreated", 1, 1L, orderId.toString(), payload);
+        UUID eventId = event.getId();
+        long sequence = event.getAggregateSequence();
+        Map<String, Object> serialized = event.getPayload();
+
+        event.recordFailure("broker unavailable", Instant.now().plusSeconds(5));
+
+        assertThat(event.getId()).isEqualTo(eventId);
+        assertThat(event.getAggregateSequence()).isEqualTo(sequence);
+        assertThat(event.getPayload()).isEqualTo(serialized);
+        assertThat(event.getPartitionKey()).isEqualTo(orderId.toString());
+        assertThat(event.getEventVersion()).isEqualTo(1);
+    }
+
+    @Test
     void recordFailureIncrementsAttemptsAndSchedulesRetry() {
         OutboxEvent event = OutboxEvent.create(
                 "Order", UUID.randomUUID(), "OrderCreated", Map.of());

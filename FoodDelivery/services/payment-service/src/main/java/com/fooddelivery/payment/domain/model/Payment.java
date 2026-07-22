@@ -59,6 +59,9 @@ public class Payment {
     @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<Refund> refunds = new ArrayList<>();
 
+    @Column(name = "event_sequence", nullable = false)
+    private long eventSequence;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -72,8 +75,19 @@ public class Payment {
         this.amount = amount.amount();
         this.paymentMethod = paymentMethod;
         this.status = PaymentStatus.PENDING;
+        this.eventSequence = 0;
         this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
+    }
+
+    /**
+     * Allocates the next monotonic outbox sequence for this payment aggregate.
+     * Sequence is owned by the aggregate transaction — never by the relay.
+     */
+    public long nextEventSequence() {
+        this.eventSequence++;
+        this.updatedAt = Instant.now();
+        return this.eventSequence;
     }
 
     public static Payment create(UUID orderId, UUID customerId, Money amount, PaymentMethod paymentMethod) {
@@ -120,26 +134,52 @@ public class Payment {
         this.updatedAt = Instant.now();
     }
 
-    public Refund requestRefund(Money refundAmount, String reason) {
+    /**
+     * Creates a refund row while payment remains {@link PaymentStatus#PAID}.
+     * Only {@link Refund#complete()} may call {@link #markRefunded()}.
+     */
+    public Refund requestRefund(Money refundAmount, String reason,
+                                String idempotencyKey, String requestHash) {
         if (status != PaymentStatus.PAID) {
             throw new InvalidPaymentStateException(status);
         }
-        
+        if (refunds.stream().anyMatch(r -> r.getStatus() != RefundStatus.FAILED)) {
+            throw new InvalidPaymentStateException(status);
+        }
+
         Money alreadyRefunded = refunds.stream()
                 .filter(r -> r.getStatus() == RefundStatus.COMPLETED)
                 .map(Refund::getAmount)
                 .reduce(Money.ZERO, Money::add);
-        
+
         BigDecimal remaining = this.amount.subtract(alreadyRefunded.amount());
         if (refundAmount.amount().compareTo(remaining) > 0) {
             throw new RefundExceedsPaymentAmountException(this.id);
         }
-        
-        Refund refund = Refund.create(this, refundAmount, reason);
+
+        Refund refund = Refund.create(this, refundAmount, reason, idempotencyKey, requestHash);
         refunds.add(refund);
-        
-        this.status = PaymentStatus.REFUNDED;
         this.updatedAt = Instant.now();
         return refund;
+    }
+
+    /** @deprecated use {@link #requestRefund(Money, String, String, String)} */
+    @Deprecated
+    public Refund requestRefund(Money refundAmount, String reason) {
+        return requestRefund(refundAmount, reason, "legacy-refund:" + UuidCreator.nextUuidV7(), "0".repeat(64));
+    }
+
+    /**
+     * Terminal payment transition after a completed refund. Idempotent if already REFUNDED.
+     */
+    public void markRefunded() {
+        if (status == PaymentStatus.REFUNDED) {
+            return;
+        }
+        if (status != PaymentStatus.PAID) {
+            throw new InvalidPaymentStateException(status);
+        }
+        this.status = PaymentStatus.REFUNDED;
+        this.updatedAt = Instant.now();
     }
 }

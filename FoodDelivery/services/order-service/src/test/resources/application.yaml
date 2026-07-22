@@ -27,6 +27,15 @@ eureka:
   client:
     enabled: false
 
+order:
+  restaurant-acceptance-timeout: 10m
+  restaurant-acceptance-timeout-scheduler:
+    enabled: false
+  delivery-reconciliation:
+    enabled: false
+  refund-reconciliation:
+    enabled: false
+
 app:
   security:
     internal-service-secret: test-internal-secret
@@ -36,3 +45,7 @@ app:
     outbox:
       relay:
         enabled: false
+    inbox:
+      deferred-drain:
+        enabled: false
+      gap-window: 10m

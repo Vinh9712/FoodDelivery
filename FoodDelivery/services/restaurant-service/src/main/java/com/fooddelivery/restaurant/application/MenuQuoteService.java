@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.LocalTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,12 +25,13 @@ public class MenuQuoteService {
 
     private final RestaurantRepository restaurantRepository;
     private final MenuItemRepository menuItemRepository;
+    private final Clock clock;
 
     @Transactional(readOnly = true)
     public MenuQuoteResponse quote(UUID restaurantId, MenuQuoteRequest request) {
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new RestaurantNotFoundException("Restaurant not found: " + restaurantId));
-        if (Boolean.FALSE.equals(restaurant.getIsAcceptingOrders())) {
+        if (!restaurant.canAcceptOrders(LocalTime.now(clock))) {
             throw new IllegalArgumentException("Restaurant is not accepting orders");
         }
 
@@ -70,7 +73,16 @@ public class MenuQuoteService {
         if (subtotal.compareTo(minimumOrder) < 0) {
             throw new IllegalArgumentException("Order subtotal is below the restaurant minimum");
         }
-        return new MenuQuoteResponse(restaurantId, subtotal, List.copyOf(quotedItems));
+        return new MenuQuoteResponse(restaurantId, subtotal, pickup(restaurant), List.copyOf(quotedItems));
+    }
+
+    private MenuQuoteResponse.PickupSnapshot pickup(Restaurant restaurant) {
+        String addressText = java.util.stream.Stream.of(
+                        restaurant.getAddressLine(), restaurant.getDistrict(), restaurant.getCity())
+                .filter(value -> value != null && !value.isBlank())
+                .collect(java.util.stream.Collectors.joining(", "));
+        return new MenuQuoteResponse.PickupSnapshot(
+                restaurant.getId(), restaurant.getName(), restaurant.getPhone(), addressText, null, null);
     }
 
     private Map<UUID, Integer> aggregateQuantities(List<MenuQuoteRequest.Item> items) {

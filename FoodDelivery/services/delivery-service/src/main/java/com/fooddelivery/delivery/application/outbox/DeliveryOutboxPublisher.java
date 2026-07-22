@@ -1,6 +1,8 @@
 package com.fooddelivery.delivery.application.outbox;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fooddelivery.commonevents.IntegrationEventEnvelope;
 import com.fooddelivery.delivery.infrastructure.persistence.OutboxEvent;
 import com.fooddelivery.delivery.infrastructure.repository.OutboxEventRepository;
 import org.slf4j.Logger;
@@ -13,8 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -54,6 +54,7 @@ public class DeliveryOutboxPublisher {
     /**
      * Publish a single due outbox event in its own transaction (REQUIRES_NEW).
      * Waits for broker ACK before marking published.
+     * Identity, version, sequence, and occurredAt come from the persisted outbox row.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void publishOne(UUID eventId) {
@@ -64,15 +65,22 @@ public class DeliveryOutboxPublisher {
         }
 
         try {
-            Object payload = objectMapper.readValue(event.getPayload(), Object.class);
-            Map<String, Object> envelope = new LinkedHashMap<>();
-            envelope.put("eventId", event.getId().toString());
-            envelope.put("eventType", event.getEventType());
-            envelope.put("timestamp", event.getOccurredAt().toString());
-            envelope.put("payload", payload);
+            JsonNode payload = objectMapper.readTree(event.getPayload());
+            IntegrationEventEnvelope<JsonNode> envelope = new IntegrationEventEnvelope<>(
+                    event.getId(),
+                    event.getEventType(),
+                    event.getEventVersion(),
+                    event.getOccurredAt(),
+                    event.getAggregateType(),
+                    event.getAggregateId(),
+                    event.getAggregateSequence(),
+                    payload);
 
             String topic = topicMapper.topicFor(event.getEventType());
-            kafkaTemplate.send(topic, event.getAggregateId().toString(), envelope)
+            String key = event.getPartitionKey() != null
+                    ? event.getPartitionKey()
+                    : event.getAggregateId().toString();
+            kafkaTemplate.send(topic, key, envelope)
                     .get(sendTimeout.toMillis(), TimeUnit.MILLISECONDS);
             event.markPublished();
             log.info("Published delivery outbox event {} ({})", event.getId(), event.getEventType());
