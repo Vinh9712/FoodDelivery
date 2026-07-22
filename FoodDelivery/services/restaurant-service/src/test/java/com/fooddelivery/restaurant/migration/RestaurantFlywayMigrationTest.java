@@ -33,14 +33,14 @@ class RestaurantFlywayMigrationTest {
             new PostgreSQLContainer<>("postgres:16-alpine");
 
     @Test
-    void upgradesExistingSchemaThroughV6AndMatchesEntities() throws Exception {
+    void upgradesExistingSchemaThroughV8AndMatchesEntities() throws Exception {
         migrateTo("5");
         seedExistingMenuData();
 
         Flyway latest = flyway();
         latest.migrate();
 
-        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("6");
+        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("8");
         assertThat(value("SELECT display_order FROM menu_categories WHERE name = 'Category'"))
                 .isEqualTo("7");
         assertThat(value("SELECT is_active::text FROM menu_categories WHERE name = 'Category'"))
@@ -49,6 +49,20 @@ class RestaurantFlywayMigrationTest {
                 .isEqualTo("20");
         assertThat(value("SELECT restaurant_id FROM menu_items WHERE name = 'Item'"))
                 .isNotBlank();
+        assertThat(value("SELECT is_accepting_orders::text FROM restaurants WHERE name = 'Restaurant'"))
+                .isEqualTo("true");
+        assertThat(value("SELECT column_default FROM information_schema.columns "
+                + "WHERE table_name = 'restaurants' AND column_name = 'is_accepting_orders'"))
+                .isEqualTo("false");
+        assertThat(value("SELECT indexname FROM pg_indexes WHERE tablename = 'restaurants' "
+                + "AND indexname = 'idx_restaurants_order_eligibility'"))
+                .isEqualTo("idx_restaurants_order_eligibility");
+        assertThat(value("SELECT indexdef FROM pg_indexes WHERE tablename = 'restaurants' "
+                + "AND indexname = 'idx_restaurants_order_eligibility'"))
+                .contains("(status, is_accepting_orders, open_time, close_time)");
+        assertThat(value("SELECT column_default FROM information_schema.columns "
+                + "WHERE table_name = 'restaurants' AND column_name = 'version'"))
+                .isEqualTo("0");
 
         assertThatCode(this::validateHibernateSchema)
                 .doesNotThrowAnyException();

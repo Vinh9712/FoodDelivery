@@ -5,6 +5,7 @@ import com.fooddelivery.restaurant.domain.MenuItem;
 import com.fooddelivery.restaurant.domain.MenuItemRepository;
 import com.fooddelivery.restaurant.domain.Restaurant;
 import com.fooddelivery.restaurant.domain.RestaurantRepository;
+import com.fooddelivery.restaurant.domain.RestaurantStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,6 +13,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -20,9 +25,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyIterable;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class MenuQuoteServiceTest {
+
+    private static final Clock OPEN_CLOCK = Clock.fixed(
+            Instant.parse("2026-07-22T05:00:00Z"), ZoneId.of("Asia/Ho_Chi_Minh"));
 
     @Mock
     private RestaurantRepository restaurantRepository;
@@ -36,13 +45,9 @@ class MenuQuoteServiceTest {
 
     @BeforeEach
     void setUp() {
-        menuQuoteService = new MenuQuoteService(restaurantRepository, menuItemRepository);
+        menuQuoteService = new MenuQuoteService(restaurantRepository, menuItemRepository, OPEN_CLOCK);
         restaurantId = UUID.randomUUID();
-        restaurant = Restaurant.builder()
-                .id(restaurantId)
-                .isAcceptingOrders(true)
-                .minOrderAmount(BigDecimal.ZERO)
-                .build();
+        restaurant = activeRestaurant();
         when(restaurantRepository.findById(restaurantId)).thenReturn(Optional.of(restaurant));
     }
 
@@ -120,6 +125,67 @@ class MenuQuoteServiceTest {
                 new MenuQuoteRequest.Item(itemId, 40)));
 
         assertThrows(IllegalArgumentException.class, () -> menuQuoteService.quote(restaurantId, request));
+    }
+
+    @Test
+    void quoteRejectsInactiveRestaurantBeforeLoadingMenuItems() {
+        restaurant.setStatus(RestaurantStatus.INACTIVE);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> menuQuoteService.quote(restaurantId, request()));
+
+        assertEquals("Restaurant is not accepting orders", exception.getMessage());
+        verifyNoInteractions(menuItemRepository);
+    }
+
+    @Test
+    void quoteRejectsRestaurantOutsideHoursBeforeLoadingMenuItems() {
+        restaurant.setStatus(RestaurantStatus.ACTIVE);
+        restaurant.setOpenTime(LocalTime.of(20, 0));
+        restaurant.setCloseTime(LocalTime.of(22, 0));
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> menuQuoteService.quote(restaurantId, request()));
+
+        assertEquals("Restaurant is not accepting orders", exception.getMessage());
+        verifyNoInteractions(menuItemRepository);
+    }
+
+    @Test
+    void quoteReturnsImmutablePickupSnapshot() {
+        restaurant.setName("Pho 24");
+        restaurant.setPhone("0901000000");
+        restaurant.setAddressLine("12 Le Loi");
+        restaurant.setDistrict("District 1");
+        restaurant.setCity("Ho Chi Minh City");
+        UUID itemId = UUID.randomUUID();
+        when(menuItemRepository.findAllById(anyIterable())).thenReturn(List.of(
+                menuItem(itemId, restaurant, "Pho", "75000", null, true)));
+
+        var response = menuQuoteService.quote(restaurantId, request(itemId));
+
+        assertEquals(new com.fooddelivery.restaurant.api.dto.internal.MenuQuoteResponse.PickupSnapshot(
+                restaurantId, "Pho 24", "0901000000", "12 Le Loi, District 1, Ho Chi Minh City", null, null),
+                response.pickup());
+    }
+
+    private Restaurant activeRestaurant() {
+        return Restaurant.builder()
+                .id(restaurantId)
+                .status(RestaurantStatus.ACTIVE)
+                .isAcceptingOrders(true)
+                .openTime(LocalTime.of(8, 0))
+                .closeTime(LocalTime.of(22, 0))
+                .minOrderAmount(BigDecimal.ZERO)
+                .build();
+    }
+
+    private MenuQuoteRequest request() {
+        return new MenuQuoteRequest(List.of(new MenuQuoteRequest.Item(UUID.randomUUID(), 1)));
+    }
+
+    private MenuQuoteRequest request(UUID itemId) {
+        return new MenuQuoteRequest(List.of(new MenuQuoteRequest.Item(itemId, 1)));
     }
 
     private MenuItem menuItem(UUID id, Restaurant owner, String name, String price,

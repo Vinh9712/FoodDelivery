@@ -10,6 +10,7 @@ import org.hibernate.annotations.Type;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 
 import com.fooddelivery.order.domain.util.UuidCreator;
 
@@ -19,6 +20,8 @@ import com.fooddelivery.order.domain.util.UuidCreator;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class OutboxEvent {
+
+    private static final AtomicLong LEGACY_SEQUENCE = new AtomicLong();
 
     @Id
     @Column(name = "id", updatable = false, nullable = false)
@@ -35,6 +38,15 @@ public class OutboxEvent {
     /** Event type, e.g. {@code "OrderCreated"} */
     @Column(name = "event_type", nullable = false, length = 100)
     private String eventType;
+
+    @Column(name = "event_version", nullable = false)
+    private int eventVersion;
+
+    @Column(name = "aggregate_sequence", nullable = false)
+    private long aggregateSequence;
+
+    @Column(name = "partition_key", nullable = false, length = 100)
+    private String partitionKey;
 
     /** Event payload (JSONB) */
     @Type(JsonType.class)
@@ -68,11 +80,29 @@ public class OutboxEvent {
      */
     public static OutboxEvent create(String aggregateType, UUID aggregateId,
                                      String eventType, Map<String, Object> payload) {
+        return create(aggregateType, aggregateId, eventType, 1,
+                LEGACY_SEQUENCE.incrementAndGet(), aggregateId.toString(), payload);
+    }
+
+    public static OutboxEvent create(String aggregateType, UUID aggregateId,
+                                     String eventType, int eventVersion,
+                                     long aggregateSequence, String partitionKey,
+                                     Map<String, Object> payload) {
+        if (aggregateType == null || aggregateType.isBlank()) throw new IllegalArgumentException("aggregateType is required");
+        if (aggregateId == null) throw new IllegalArgumentException("aggregateId is required");
+        if (eventType == null || eventType.isBlank()) throw new IllegalArgumentException("eventType is required");
+        if (eventVersion != 1) throw new IllegalArgumentException("eventVersion must be 1");
+        if (aggregateSequence < 1) throw new IllegalArgumentException("aggregateSequence must be positive");
+        if (partitionKey == null || partitionKey.isBlank()) throw new IllegalArgumentException("partitionKey is required");
+        if (payload == null) throw new IllegalArgumentException("payload is required");
         var event = new OutboxEvent();
         event.id = UuidCreator.nextUuidV7();
         event.aggregateType = aggregateType;
         event.aggregateId = aggregateId;
         event.eventType = eventType;
+        event.eventVersion = eventVersion;
+        event.aggregateSequence = aggregateSequence;
+        event.partitionKey = partitionKey;
         event.payload = payload;
         event.publishedAt = null;
         event.attempts = 0;

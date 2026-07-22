@@ -1,5 +1,8 @@
 package com.fooddelivery.order.application.outbox;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fooddelivery.commonevents.IntegrationEventEnvelope;
 import com.fooddelivery.order.domain.model.OutboxEvent;
 import com.fooddelivery.order.infrastructure.repository.OutboxEventRepository;
 import org.slf4j.Logger;
@@ -12,8 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -27,6 +28,7 @@ public class OrderOutboxPublisher {
     private final OutboxEventRepository outboxEventRepository;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final OrderOutboxTopicMapper topicMapper;
+    private final ObjectMapper objectMapper;
     private final Duration sendTimeout;
     private final Duration retryBaseDelay;
     private final Duration retryMaxDelay;
@@ -36,6 +38,7 @@ public class OrderOutboxPublisher {
             OutboxEventRepository outboxEventRepository,
             KafkaTemplate<String, Object> kafkaTemplate,
             OrderOutboxTopicMapper topicMapper,
+            ObjectMapper objectMapper,
             @Value("${app.order.outbox.relay.send-timeout:5s}") Duration sendTimeout,
             @Value("${app.order.outbox.relay.retry-base-delay:5s}") Duration retryBaseDelay,
             @Value("${app.order.outbox.relay.retry-max-delay:5m}") Duration retryMaxDelay,
@@ -43,6 +46,7 @@ public class OrderOutboxPublisher {
         this.outboxEventRepository = outboxEventRepository;
         this.kafkaTemplate = kafkaTemplate;
         this.topicMapper = topicMapper;
+        this.objectMapper = objectMapper;
         this.sendTimeout = sendTimeout;
         this.retryBaseDelay = retryBaseDelay;
         this.retryMaxDelay = retryMaxDelay;
@@ -58,14 +62,22 @@ public class OrderOutboxPublisher {
         }
 
         try {
-            Map<String, Object> envelope = new LinkedHashMap<>();
-            envelope.put("eventId", event.getId().toString());
-            envelope.put("eventType", event.getEventType());
-            envelope.put("timestamp", event.getCreatedAt().toString());
-            envelope.put("payload", event.getPayload());
+            JsonNode payload = objectMapper.valueToTree(event.getPayload());
+            IntegrationEventEnvelope<JsonNode> envelope = new IntegrationEventEnvelope<>(
+                    event.getId(),
+                    event.getEventType(),
+                    event.getEventVersion(),
+                    event.getCreatedAt(),
+                    event.getAggregateType(),
+                    event.getAggregateId(),
+                    event.getAggregateSequence(),
+                    payload);
 
             String topic = topicMapper.topicFor(event.getEventType());
-            kafkaTemplate.send(topic, event.getAggregateId().toString(), envelope)
+            String key = event.getPartitionKey() != null
+                    ? event.getPartitionKey()
+                    : event.getAggregateId().toString();
+            kafkaTemplate.send(topic, key, envelope)
                     .get(sendTimeout.toMillis(), TimeUnit.MILLISECONDS);
             event.markPublished();
             log.info("Published order outbox event {} ({})", event.getId(), event.getEventType());

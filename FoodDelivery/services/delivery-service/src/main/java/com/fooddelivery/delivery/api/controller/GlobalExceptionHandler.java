@@ -2,6 +2,7 @@ package com.fooddelivery.delivery.api.controller;
 
 import com.fooddelivery.delivery.domain.exception.DeliveryAccessDeniedException;
 import com.fooddelivery.delivery.domain.exception.DeliveryNotFoundException;
+import com.fooddelivery.delivery.domain.exception.DeliveryScheduleConflictException;
 import com.fooddelivery.delivery.domain.exception.DriverNotEligibleException;
 import com.fooddelivery.delivery.domain.exception.DriverNotFoundException;
 import com.fooddelivery.delivery.domain.exception.InvalidDeliveryStateException;
@@ -25,7 +26,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", ex.getMessage()));
     }
 
-    @ExceptionHandler({InvalidDeliveryStateException.class, DriverNotEligibleException.class})
+    @ExceptionHandler({
+            InvalidDeliveryStateException.class,
+            DriverNotEligibleException.class,
+            DeliveryScheduleConflictException.class
+    })
     public ResponseEntity<Map<String, String>> conflict(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", ex.getMessage()));
     }
@@ -33,5 +38,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DeliveryAccessDeniedException.class)
     public ResponseEntity<Map<String, String>> forbidden(DeliveryAccessDeniedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, String>> badRequest(IllegalArgumentException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", ex.getMessage()));
     }
 }

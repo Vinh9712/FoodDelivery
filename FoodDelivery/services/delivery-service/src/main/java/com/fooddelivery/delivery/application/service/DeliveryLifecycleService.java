@@ -2,6 +2,8 @@ package com.fooddelivery.delivery.application.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fooddelivery.commonevents.EventContracts;
+import com.fooddelivery.commonevents.delivery.DeliveryEventPayloads;
 import com.fooddelivery.delivery.domain.exception.DeliveryAccessDeniedException;
 import com.fooddelivery.delivery.domain.exception.DeliveryNotFoundException;
 import com.fooddelivery.delivery.domain.exception.DriverNotFoundException;
@@ -14,18 +16,17 @@ import com.fooddelivery.delivery.infrastructure.persistence.OutboxEvent;
 import com.fooddelivery.delivery.infrastructure.repository.DeliveryRepository;
 import com.fooddelivery.delivery.infrastructure.repository.DriverRepository;
 import com.fooddelivery.delivery.infrastructure.repository.OutboxEventRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class DeliveryLifecycleService {
 
@@ -34,6 +35,22 @@ public class DeliveryLifecycleService {
     private final OutboxEventRepository outboxEventRepository;
     private final DeliveryAssignmentService assignmentService;
     private final ObjectMapper objectMapper;
+    private final Clock clock;
+
+    public DeliveryLifecycleService(
+            DeliveryRepository deliveryRepository,
+            DriverRepository driverRepository,
+            OutboxEventRepository outboxEventRepository,
+            DeliveryAssignmentService assignmentService,
+            ObjectMapper objectMapper,
+            Clock clock) {
+        this.deliveryRepository = deliveryRepository;
+        this.driverRepository = driverRepository;
+        this.outboxEventRepository = outboxEventRepository;
+        this.assignmentService = assignmentService;
+        this.objectMapper = objectMapper;
+        this.clock = clock;
+    }
 
     @Transactional
     public Delivery accept(UUID deliveryId, UUID driverUserId) {
@@ -52,13 +69,12 @@ public class DeliveryLifecycleService {
             throw new InvalidDeliveryStateException(delivery.getStatus());
         }
 
+        Instant assignedAt = clock.instant();
         driver.reserveForDelivery();
-        delivery.assignDriver(driver.getId());
+        delivery.assignDriver(driver.getId(), assignedAt);
         driverRepository.save(driver);
-        deliveryRepository.save(delivery);
-        outboxEventRepository.save(new OutboxEvent(
-                "Delivery", delivery.getId(), "driver.assigned",
-                assignmentService.buildDriverAssignedPayload(delivery, driver)));
+        saveOutbox(delivery, EventContracts.DRIVER_ASSIGNED,
+                assignmentService.buildDriverAssignedPayload(delivery, driver, assignedAt), assignedAt);
         return delivery;
     }
 
@@ -67,11 +83,10 @@ public class DeliveryLifecycleService {
         Driver driver = requireDriverByUser(driverUserId);
         Delivery delivery = lockDelivery(deliveryId);
         assertAssignedDriver(delivery, driver.getId());
-        delivery.pickUp();
-        deliveryRepository.save(delivery);
-        outboxEventRepository.save(new OutboxEvent(
-                "Delivery", delivery.getId(), "delivery.picked-up",
-                lifecyclePayload(delivery, "delivery.picked-up")));
+        Instant pickedUpAt = clock.instant();
+        delivery.pickUp(pickedUpAt);
+        saveOutbox(delivery, EventContracts.DELIVERY_PICKED_UP,
+                lifecyclePayload(delivery, EventContracts.DELIVERY_PICKED_UP, pickedUpAt), pickedUpAt);
         return delivery;
     }
 
@@ -80,11 +95,10 @@ public class DeliveryLifecycleService {
         Driver driver = requireDriverByUser(driverUserId);
         Delivery delivery = lockDelivery(deliveryId);
         assertAssignedDriver(delivery, driver.getId());
-        delivery.startDelivering();
-        deliveryRepository.save(delivery);
-        outboxEventRepository.save(new OutboxEvent(
-                "Delivery", delivery.getId(), "delivery.in-transit",
-                lifecyclePayload(delivery, "delivery.in-transit")));
+        Instant startedAt = clock.instant();
+        delivery.startDelivering(startedAt);
+        saveOutbox(delivery, EventContracts.DELIVERY_IN_TRANSIT,
+                lifecyclePayload(delivery, EventContracts.DELIVERY_IN_TRANSIT, startedAt), startedAt);
         return delivery;
     }
 
@@ -94,11 +108,10 @@ public class DeliveryLifecycleService {
         Delivery delivery = lockDelivery(deliveryId);
         assertAssignedDriver(delivery, driver.getId());
         UUID assignedDriverId = delivery.getDriverId();
-        delivery.complete();
-        deliveryRepository.save(delivery);
-        outboxEventRepository.save(new OutboxEvent(
-                "Delivery", delivery.getId(), "delivery.completed",
-                lifecyclePayload(delivery, "delivery.completed")));
+        Instant deliveredAt = clock.instant();
+        delivery.complete(deliveredAt);
+        saveOutbox(delivery, EventContracts.DELIVERY_COMPLETED,
+                lifecyclePayload(delivery, EventContracts.DELIVERY_COMPLETED, deliveredAt), deliveredAt);
         assignmentService.releaseDriverIfIdle(assignedDriverId, delivery.getId());
         return delivery;
     }
@@ -109,11 +122,10 @@ public class DeliveryLifecycleService {
         Delivery delivery = lockDelivery(deliveryId);
         assertAssignedDriver(delivery, driver.getId());
         UUID assignedDriverId = delivery.getDriverId();
-        delivery.fail(reason == null ? "Delivery failed" : reason);
-        deliveryRepository.save(delivery);
-        outboxEventRepository.save(new OutboxEvent(
-                "Delivery", delivery.getId(), "delivery.failed",
-                lifecyclePayload(delivery, "delivery.failed")));
+        Instant failedAt = clock.instant();
+        delivery.fail(reason == null ? "Delivery failed" : reason, failedAt);
+        saveOutbox(delivery, EventContracts.DELIVERY_FAILED,
+                lifecyclePayload(delivery, EventContracts.DELIVERY_FAILED, failedAt), failedAt);
         assignmentService.releaseDriverIfIdle(assignedDriverId, delivery.getId());
         return delivery;
     }
@@ -145,6 +157,20 @@ public class DeliveryLifecycleService {
         return deliveryRepository.save(delivery);
     }
 
+    private void saveOutbox(Delivery delivery, String eventType, String payload, Instant occurredAt) {
+        long sequence = delivery.nextEventSequence();
+        deliveryRepository.save(delivery);
+        outboxEventRepository.save(new OutboxEvent(
+                "Delivery",
+                delivery.getId(),
+                eventType,
+                1,
+                sequence,
+                delivery.getOrderId().toString(),
+                payload,
+                occurredAt));
+    }
+
     private Delivery lockDelivery(UUID deliveryId) {
         return deliveryRepository.findByIdForUpdate(deliveryId)
                 .orElseThrow(() -> new DeliveryNotFoundException(deliveryId));
@@ -161,20 +187,32 @@ public class DeliveryLifecycleService {
         }
     }
 
-    private String lifecyclePayload(Delivery delivery, String eventType) {
+    private String lifecyclePayload(Delivery delivery, String eventType, Instant occurredAt) {
         try {
             ObjectNode root = objectMapper.createObjectNode();
             root.put("orderId", delivery.getOrderId().toString());
             root.put("deliveryId", delivery.getId().toString());
-            root.put("status", delivery.getStatus().name());
-            root.put("eventType", eventType);
+            if (delivery.getCustomerId() != null) {
+                root.put("customerId", delivery.getCustomerId().toString());
+            }
             if (delivery.getDriverId() != null) {
                 root.put("driverId", delivery.getDriverId().toString());
             }
-            if (delivery.getFailureReason() != null) {
-                root.put("reason", delivery.getFailureReason());
+            switch (eventType) {
+                case EventContracts.DELIVERY_PICKED_UP ->
+                        root.put("pickedUpAt", occurredAt.toString());
+                case EventContracts.DELIVERY_IN_TRANSIT ->
+                        root.put("deliveryStartedAt", occurredAt.toString());
+                case EventContracts.DELIVERY_COMPLETED ->
+                        root.put("deliveredAt", occurredAt.toString());
+                case EventContracts.DELIVERY_FAILED -> {
+                    root.put("failureCode", DeliveryEventPayloads.FailureCode.DRIVER_REPORTED.name());
+                    root.put("reason", delivery.getFailureReason() == null
+                            ? "Delivery failed" : delivery.getFailureReason());
+                    root.put("failedAt", occurredAt.toString());
+                }
+                default -> root.put("occurredAt", occurredAt.toString());
             }
-            root.put("occurredAt", Instant.now().toString());
             return objectMapper.writeValueAsString(root);
         } catch (Exception e) {
             throw new RuntimeException("Failed to serialize " + eventType + " payload", e);

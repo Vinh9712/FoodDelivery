@@ -3,7 +3,10 @@ package com.fooddelivery.restaurant.api;
 import com.fooddelivery.restaurant.api.dto.RestaurantRequest;
 import com.fooddelivery.restaurant.api.dto.RestaurantResponse;
 import com.fooddelivery.restaurant.api.dto.RestaurantSearchRequest;
+import com.fooddelivery.restaurant.api.dto.RestaurantAvailabilityRequest;
+import com.fooddelivery.restaurant.api.dto.RestaurantStatusRequest;
 import com.fooddelivery.restaurant.application.RestaurantService;
+import com.fooddelivery.restaurant.domain.RestaurantStatus;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -73,6 +76,22 @@ public class RestaurantController {
         log.info("DELETE /api/v1/restaurants/{} - Delete restaurant", id);
         restaurantService.deleteRestaurant(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/availability")
+    @PreAuthorize("@restaurantAuthorization.canManageRestaurant(#id, authentication)")
+    public ResponseEntity<RestaurantResponse> setAvailability(
+            @PathVariable("id") UUID id,
+            @Valid @RequestBody RestaurantAvailabilityRequest request) {
+        return ResponseEntity.ok(restaurantService.setAvailability(id, request.accepting()));
+    }
+
+    @PatchMapping("/{id}/status")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<RestaurantResponse> changeStatus(
+            @PathVariable("id") UUID id,
+            @Valid @RequestBody RestaurantStatusRequest request) {
+        return ResponseEntity.ok(restaurantService.changeStatus(id, request.status()));
     }
 
     @GetMapping("/owner/{ownerId}")

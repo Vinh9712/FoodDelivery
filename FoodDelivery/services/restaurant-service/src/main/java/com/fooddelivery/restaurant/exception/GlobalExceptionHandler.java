@@ -1,9 +1,13 @@
 package com.fooddelivery.restaurant.exception;
 
 import com.fooddelivery.restaurant.api.dto.ErrorResponse;
+import com.fooddelivery.restaurant.domain.exception.InvalidRestaurantStateException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -17,6 +21,29 @@ import java.util.Map;
 @Slf4j
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(InvalidRestaurantStateException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidRestaurantState(
+            InvalidRestaurantStateException ex, WebRequest request) {
+        return error(HttpStatus.CONFLICT, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleOptimisticLockFailure(
+            OptimisticLockingFailureException ex, WebRequest request) {
+        return error(HttpStatus.CONFLICT, "Restaurant was updated by another request", request);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadableRequest(
+            HttpMessageNotReadableException ex, WebRequest request) {
+        return error(HttpStatus.BAD_REQUEST, "Malformed request body", request);
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex, WebRequest request) {
+        return error(HttpStatus.FORBIDDEN, "Access denied", request);
+    }
+
     @ExceptionHandler(RestaurantNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleRestaurantNotFound(RestaurantNotFoundException ex, WebRequest request) {
         log.error("Restaurant not found: {}", ex.getMessage());
@@ -28,6 +55,17 @@ public class GlobalExceptionHandler {
                 .path(request.getDescription(false))
                 .build();
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    }
+
+    private ResponseEntity<ErrorResponse> error(HttpStatus status, String message, WebRequest request) {
+        ErrorResponse error = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(status.value())
+                .error(status.getReasonPhrase())
+                .message(message)
+                .path(request.getDescription(false))
+                .build();
+        return ResponseEntity.status(status).body(error);
     }
 
     @ExceptionHandler(CategoryNotFoundException.class)

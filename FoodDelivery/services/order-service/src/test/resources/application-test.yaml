@@ -37,11 +37,14 @@ spring:
   flyway:
     enabled: false
 
-  # Disable Kafka trong test
+  # Disable Kafka listeners in unit/integration tests (no broker required)
   kafka:
     bootstrap-servers: localhost:9999
-    consumer:
+    listener:
       auto-startup: false
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
 # Disable Eureka
 eureka:
@@ -60,6 +63,9 @@ spring.cloud.openfeign.client.config:
   restaurant-service:
     url: http://localhost:18085
 
+order:
+  restaurant-acceptance-timeout: 10m
+
 app:
   security:
     internal-service-secret: test-internal-secret
@@ -71,6 +77,10 @@ app:
     outbox:
       relay:
         enabled: false
+    kafka:
+      order-events-topic: order.events.v1
+      delivery-events-topic: delivery.events.v1
+      payment-events-topic: payment.events.v1
 
 server:
   port: 0  # Random port cho test

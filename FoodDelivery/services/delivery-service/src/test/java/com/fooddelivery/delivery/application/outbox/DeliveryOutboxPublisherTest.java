@@ -1,9 +1,14 @@
 package com.fooddelivery.delivery.application.outbox;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JavaType;
+import com.fooddelivery.commonevents.EventContracts;
+import com.fooddelivery.commonevents.IntegrationEventEnvelope;
 import com.fooddelivery.delivery.infrastructure.persistence.OutboxEvent;
 import com.fooddelivery.delivery.infrastructure.repository.OutboxEventRepository;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 
@@ -26,13 +31,53 @@ import static org.mockito.Mockito.when;
 
 class DeliveryOutboxPublisherTest {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+
+    @Test
+    void publishesCanonicalEnvelopeForLifecycleEvents() throws Exception {
+        for (String eventType : new String[]{
+                EventContracts.DRIVER_ASSIGNED,
+                EventContracts.DELIVERY_PICKED_UP,
+                EventContracts.DELIVERY_IN_TRANSIT,
+                EventContracts.DELIVERY_COMPLETED,
+                EventContracts.DELIVERY_FAILED}) {
+            OutboxEventRepository repository = mock(OutboxEventRepository.class);
+            KafkaTemplate<String, Object> kafkaTemplate = mock();
+            UUID orderId = UUID.randomUUID();
+            UUID customerId = UUID.randomUUID();
+            OutboxEvent event = event(eventType, orderId, customerId, 4L);
+            when(repository.findByIdForUpdate(event.getId())).thenReturn(Optional.of(event));
+            when(kafkaTemplate.send(anyString(), anyString(), any()))
+                    .thenReturn(CompletableFuture.completedFuture(null));
+
+            publisher(repository, kafkaTemplate, 3).publishOne(event.getId());
+
+            ArgumentCaptor<Object> envelopeCaptor = ArgumentCaptor.forClass(Object.class);
+            verify(kafkaTemplate).send(
+                    eq(EventContracts.DELIVERY_EVENTS_V1),
+                    eq(orderId.toString()),
+                    envelopeCaptor.capture());
+
+            IntegrationEventEnvelope<JsonNode> envelope = deserialize(envelopeCaptor.getValue());
+            assertThat(envelope.eventId()).isEqualTo(event.getId());
+            assertThat(envelope.eventType()).isEqualTo(eventType);
+            assertThat(envelope.eventVersion()).isEqualTo(1);
+            assertThat(envelope.occurredAt()).isEqualTo(event.getOccurredAt());
+            assertThat(envelope.aggregateType()).isEqualTo("Delivery");
+            assertThat(envelope.aggregateId()).isEqualTo(event.getAggregateId());
+            assertThat(envelope.aggregateSequence()).isEqualTo(4L);
+            assertThat(envelope.payload().path("customerId").asText()).isEqualTo(customerId.toString());
+            assertThat(envelope.payload().path("orderId").asText()).isEqualTo(orderId.toString());
+            assertThat(event.isPublished()).isTrue();
+        }
+    }
 
     @Test
     void marksEventPublishedAfterKafkaAcknowledgesIt() {
         OutboxEventRepository repository = mock(OutboxEventRepository.class);
         KafkaTemplate<String, Object> kafkaTemplate = mock();
-        OutboxEvent event = event("driver.assigned");
+        UUID orderId = UUID.randomUUID();
+        OutboxEvent event = event(EventContracts.DRIVER_ASSIGNED, orderId, UUID.randomUUID(), 1L);
         when(repository.findByIdForUpdate(event.getId())).thenReturn(Optional.of(event));
         when(kafkaTemplate.send(anyString(), anyString(), any()))
                 .thenReturn(CompletableFuture.completedFuture(null));
@@ -42,15 +87,15 @@ class DeliveryOutboxPublisherTest {
         assertThat(event.isPublished()).isTrue();
         assertThat(event.getPublishedAt()).isNotNull();
         assertThat(event.getAttempts()).isZero();
-        verify(kafkaTemplate).send(eq("driver.assigned"),
-                eq(event.getAggregateId().toString()), any());
+        verify(kafkaTemplate).send(eq(EventContracts.DELIVERY_EVENTS_V1),
+                eq(orderId.toString()), any());
     }
 
     @Test
     void persistsBackoffWhenKafkaPublishFails() {
         OutboxEventRepository repository = mock(OutboxEventRepository.class);
         KafkaTemplate<String, Object> kafkaTemplate = mock();
-        OutboxEvent event = event("delivery.failed");
+        OutboxEvent event = event(EventContracts.DELIVERY_FAILED, UUID.randomUUID(), UUID.randomUUID(), 2L);
         when(repository.findByIdForUpdate(event.getId())).thenReturn(Optional.of(event));
         CompletableFuture<SendResult<String, Object>> failed = new CompletableFuture<>();
         failed.completeExceptionally(new IllegalStateException("Kafka unavailable"));
@@ -70,7 +115,7 @@ class DeliveryOutboxPublisherTest {
     void doesNotPublishWhenRetryNotDueYet() {
         OutboxEventRepository repository = mock(OutboxEventRepository.class);
         KafkaTemplate<String, Object> kafkaTemplate = mock();
-        OutboxEvent event = event("delivery.picked-up");
+        OutboxEvent event = event(EventContracts.DELIVERY_PICKED_UP, UUID.randomUUID(), UUID.randomUUID(), 1L);
         event.recordFailure("previous failure", Instant.now().plusSeconds(60));
         when(repository.findByIdForUpdate(event.getId())).thenReturn(Optional.of(event));
 
@@ -85,7 +130,7 @@ class DeliveryOutboxPublisherTest {
     void deadLettersEventAfterMaximumAttempts() {
         OutboxEventRepository repository = mock(OutboxEventRepository.class);
         KafkaTemplate<String, Object> kafkaTemplate = mock();
-        OutboxEvent event = event("UnsupportedEvent");
+        OutboxEvent event = event("UnsupportedEvent", UUID.randomUUID(), UUID.randomUUID(), 1L);
         when(repository.findByIdForUpdate(event.getId())).thenReturn(Optional.of(event));
 
         publisher(repository, kafkaTemplate, 1).publishOne(event.getId());
@@ -100,7 +145,7 @@ class DeliveryOutboxPublisherTest {
     void doesNotRepublishAlreadyPublishedEvent() {
         OutboxEventRepository repository = mock(OutboxEventRepository.class);
         KafkaTemplate<String, Object> kafkaTemplate = mock();
-        OutboxEvent event = event("driver.assigned");
+        OutboxEvent event = event(EventContracts.DRIVER_ASSIGNED, UUID.randomUUID(), UUID.randomUUID(), 1L);
         event.markPublished();
         when(repository.findByIdForUpdate(event.getId())).thenReturn(Optional.of(event));
 
@@ -114,7 +159,7 @@ class DeliveryOutboxPublisherTest {
     void secondPublisherDoesNotPublishSameEventConcurrently() {
         OutboxEventRepository repository = mock(OutboxEventRepository.class);
         KafkaTemplate<String, Object> kafkaTemplate = mock();
-        OutboxEvent event = event("driver.assigned");
+        OutboxEvent event = event(EventContracts.DRIVER_ASSIGNED, UUID.randomUUID(), UUID.randomUUID(), 1L);
         AtomicInteger lockCalls = new AtomicInteger();
 
         when(repository.findByIdForUpdate(event.getId())).thenAnswer(invocation -> {
@@ -138,20 +183,48 @@ class DeliveryOutboxPublisherTest {
     }
 
     @Test
-    void mapsLifecycleEventTypesToTopics() {
+    void mapsLifecycleEventTypesToDeliveryFamilyTopic() {
         OutboxEventRepository repository = mock(OutboxEventRepository.class);
         KafkaTemplate<String, Object> kafkaTemplate = mock();
         for (String eventType : new String[]{
-                "delivery.picked-up", "delivery.in-transit", "delivery.completed", "delivery.failed"}) {
-            OutboxEvent event = event(eventType);
+                EventContracts.DRIVER_ASSIGNED,
+                EventContracts.DELIVERY_PICKED_UP,
+                EventContracts.DELIVERY_IN_TRANSIT,
+                EventContracts.DELIVERY_COMPLETED,
+                EventContracts.DELIVERY_FAILED}) {
+            UUID orderId = UUID.randomUUID();
+            OutboxEvent event = event(eventType, orderId, UUID.randomUUID(), 1L);
             when(repository.findByIdForUpdate(event.getId())).thenReturn(Optional.of(event));
             when(kafkaTemplate.send(anyString(), anyString(), any()))
                     .thenReturn(CompletableFuture.completedFuture(null));
 
             publisher(repository, kafkaTemplate, 3).publishOne(event.getId());
 
-            verify(kafkaTemplate).send(eq(eventType), eq(event.getAggregateId().toString()), any());
+            verify(kafkaTemplate).send(
+                    eq(EventContracts.DELIVERY_EVENTS_V1),
+                    eq(orderId.toString()),
+                    any());
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private IntegrationEventEnvelope<JsonNode> deserialize(Object value) throws Exception {
+        if (value instanceof IntegrationEventEnvelope<?> envelope) {
+            JsonNode payload = objectMapper.valueToTree(envelope.payload());
+            return new IntegrationEventEnvelope<>(
+                    envelope.eventId(),
+                    envelope.eventType(),
+                    envelope.eventVersion(),
+                    envelope.occurredAt(),
+                    envelope.aggregateType(),
+                    envelope.aggregateId(),
+                    envelope.aggregateSequence(),
+                    payload);
+        }
+        String json = value instanceof String s ? s : objectMapper.writeValueAsString(value);
+        JavaType type = objectMapper.getTypeFactory()
+                .constructParametricType(IntegrationEventEnvelope.class, JsonNode.class);
+        return objectMapper.readValue(json, type);
     }
 
     private DeliveryOutboxPublisher publisher(
@@ -169,11 +242,18 @@ class DeliveryOutboxPublisherTest {
                 maxAttempts);
     }
 
-    private OutboxEvent event(String eventType) {
+    private OutboxEvent event(String eventType, UUID orderId, UUID customerId, long sequence) {
+        UUID deliveryId = UUID.randomUUID();
+        String payload = """
+                {"orderId":"%s","deliveryId":"%s","customerId":"%s"}
+                """.formatted(orderId, deliveryId, customerId).trim();
         return new OutboxEvent(
                 "Delivery",
-                UUID.randomUUID(),
+                deliveryId,
                 eventType,
-                "{\"orderId\":\"" + UUID.randomUUID() + "\"}");
+                1,
+                sequence,
+                orderId.toString(),
+                payload);
     }
 }

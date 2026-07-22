@@ -16,6 +16,11 @@
     <dependencies>
         <dependency>
             <groupId>com.fooddelivery</groupId>
+            <artifactId>common-events</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fooddelivery</groupId>
             <artifactId>common-security</artifactId>
             <version>${project.version}</version>
         </dependency>

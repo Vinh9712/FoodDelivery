@@ -20,6 +20,10 @@ public class OrderMapper {
                 order.getStatus(),
                 order.getTotalAmount(),
                 order.getAssignedDriver().map(this::toDriverDto).orElse(null),
+                order.getPaymentStatus(),
+                order.getRefundStatus(),
+                order.getPaidAt(),
+                order.getRestaurantResponseDeadline(),
                 order.getCreatedAt(),
                 order.getUpdatedAt()
         );

@@ -2,6 +2,9 @@
 server:
   port: 8083
 
+order:
+  restaurant-acceptance-timeout: ${ORDER_RESTAURANT_ACCEPTANCE_TIMEOUT:10m}
+
 app:
   order:
     pricing:
@@ -17,6 +20,10 @@ app:
         retry-base-delay: ${ORDER_OUTBOX_RETRY_BASE_DELAY:5s}
         retry-max-delay: ${ORDER_OUTBOX_RETRY_MAX_DELAY:5m}
         max-attempts: ${ORDER_OUTBOX_MAX_ATTEMPTS:10}
+    kafka:
+      order-events-topic: ${ORDER_EVENTS_TOPIC:order.events.v1}
+      delivery-events-topic: ${DELIVERY_EVENTS_TOPIC:delivery.events.v1}
+      payment-events-topic: ${PAYMENT_EVENTS_TOPIC:payment.events.v1}
 
 spring:
   datasource:
@@ -41,11 +48,8 @@ spring:
       group-id: order-service
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      properties:
-        spring.json.trusted.packages: "com.fooddelivery.order.*,java.util"
-        spring.json.use.type.headers: false
-        spring.json.value.default.type: java.util.Map
+      # Raw JSON string payloads — DeliveryLifecycleEventListener parses IntegrationEventEnvelope explicitly
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer

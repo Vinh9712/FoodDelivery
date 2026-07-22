@@ -9,6 +9,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import com.fooddelivery.delivery.domain.util.UuidCreator;
 
 /**
@@ -20,6 +21,8 @@ import com.fooddelivery.delivery.domain.util.UuidCreator;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class OutboxEvent {
+
+    private static final AtomicLong LEGACY_SEQUENCE = new AtomicLong();
 
     @Id
     @Column(name = "id", updatable = false, nullable = false)
@@ -33,6 +36,15 @@ public class OutboxEvent {
 
     @Column(name = "event_type", nullable = false, length = 100)
     private String eventType;
+
+    @Column(name = "event_version", nullable = false)
+    private int eventVersion;
+
+    @Column(name = "aggregate_sequence", nullable = false)
+    private long aggregateSequence;
+
+    @Column(name = "partition_key", nullable = false, length = 100)
+    private String partitionKey;
 
     @Column(name = "payload", nullable = false, columnDefinition = "jsonb")
     @JdbcTypeCode(SqlTypes.JSON)
@@ -63,12 +75,43 @@ public class OutboxEvent {
     private Instant deadLetteredAt;
 
     public OutboxEvent(String aggregateType, UUID aggregateId, String eventType, String payload) {
+        this(aggregateType, aggregateId, eventType, 1,
+                LEGACY_SEQUENCE.incrementAndGet(),
+                aggregateId == null ? "unknown" : aggregateId.toString(),
+                payload,
+                Instant.now());
+    }
+
+    public OutboxEvent(
+            String aggregateType,
+            UUID aggregateId,
+            String eventType,
+            int eventVersion,
+            long aggregateSequence,
+            String partitionKey,
+            String payload) {
+        this(aggregateType, aggregateId, eventType, eventVersion, aggregateSequence, partitionKey, payload,
+                Instant.now());
+    }
+
+    public OutboxEvent(
+            String aggregateType,
+            UUID aggregateId,
+            String eventType,
+            int eventVersion,
+            long aggregateSequence,
+            String partitionKey,
+            String payload,
+            Instant occurredAt) {
         this.id = UuidCreator.nextUuidV7();
         this.aggregateType = aggregateType;
         this.aggregateId = aggregateId;
         this.eventType = eventType;
+        this.eventVersion = eventVersion;
+        this.aggregateSequence = aggregateSequence;
+        this.partitionKey = partitionKey;
         this.payload = payload;
-        this.occurredAt = Instant.now();
+        this.occurredAt = occurredAt != null ? occurredAt : Instant.now();
         this.published = false;
         this.attempts = 0;
         this.nextAttemptAt = this.occurredAt;

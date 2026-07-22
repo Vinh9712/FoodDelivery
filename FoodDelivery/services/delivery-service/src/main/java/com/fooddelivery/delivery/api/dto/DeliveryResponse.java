@@ -3,11 +3,13 @@ package com.fooddelivery.delivery.api.dto;
 import java.util.UUID;
 
 /**
- * Response DTO cho kết quả lập lịch giao vận.
+ * Response DTO for internal delivery schedule / lookup.
  */
 public record DeliveryResponse(
+        UUID deliveryId,
         UUID orderId,
-        String status,    // "ASSIGNED" hoặc "FAILED"
-        UUID driverId,    // ID tài xế (null nếu thất bại)
+        String status,
+        UUID driverId,
         String message
-) {}
+) {
+}

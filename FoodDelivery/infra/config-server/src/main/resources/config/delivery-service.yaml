@@ -18,6 +18,9 @@ app:
       retry-base-delay: ${DELIVERY_ASSIGNMENT_RETRY_BASE_DELAY:10s}
       retry-max-delay: ${DELIVERY_ASSIGNMENT_RETRY_MAX_DELAY:10m}
       max-attempts: ${DELIVERY_ASSIGNMENT_MAX_ATTEMPTS:10}
+    kafka:
+      delivery-events-topic: ${DELIVERY_EVENTS_TOPIC:delivery.events.v1}
+      order-events-topic: ${ORDER_EVENTS_TOPIC:order.events.v1}
 
 spring:
   datasource:
@@ -42,9 +45,8 @@ spring:
       group-id: delivery-service
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      properties:
-        spring.json.trusted.packages: "com.fooddelivery.delivery.*"
+      # String payloads for explicit JSON envelope parsing (family topics are raw JSON, no Java type headers)
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer

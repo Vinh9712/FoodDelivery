@@ -2,15 +2,17 @@ package com.fooddelivery.order.infrastructure.client.dto;
 
 import java.util.UUID;
 
-/** Response nhận từ Delivery Service. */
+/** Response received from Delivery Service schedule / lookup. */
 public record DeliveryResponse(
+        UUID deliveryId,
         UUID orderId,
-        String status,   // "ASSIGNED" hoặc "FAILED"
+        String status,
         UUID driverId,
         String message
 ) {
-    /** Kiểm tra phân bổ tài xế thành công */
+    /** True when a driver was assigned on this call or already assigned. */
     public boolean isAssigned() {
-        return "ASSIGNED".equalsIgnoreCase(status);
+        return "ASSIGNED".equalsIgnoreCase(status)
+                || "DRIVER_ASSIGNED".equalsIgnoreCase(status);
     }
 }

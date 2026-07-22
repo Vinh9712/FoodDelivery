@@ -1,6 +1,8 @@
 package com.fooddelivery.order.api.dto;
 
 import com.fooddelivery.order.domain.model.valueobject.OrderStatus;
+import com.fooddelivery.order.domain.model.valueobject.PaymentStatus;
+import com.fooddelivery.order.domain.model.valueobject.RefundStatus;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -16,6 +18,10 @@ public record OrderResponse(
         OrderStatus status,
         BigDecimal totalAmount,
         AssignedDriverDto assignedDriver,
+        PaymentStatus paymentStatus,
+        RefundStatus refundStatus,
+        Instant paidAt,
+        Instant restaurantResponseDeadline,
         Instant createdAt,
         Instant updatedAt
 ) {}
