@@ -25,6 +25,10 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
 
     List<OutboxEvent> findByAggregateTypeAndAggregateId(String aggregateType, UUID aggregateId);
 
+    /**
+     * Due IDs for the head of each aggregate unpublished chain.
+     * Earlier unpublished rows (including dead-lettered) block later sequences.
+     */
     @Query("""
             select event.id from OutboxEvent event
             where event.publishedAt is null
@@ -35,13 +39,9 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
                   where earlier.aggregateType = event.aggregateType
                     and earlier.aggregateId = event.aggregateId
                     and earlier.publishedAt is null
-                    and earlier.deadLettered = false
-                    and (
-                         earlier.createdAt < event.createdAt
-                         or (earlier.createdAt = event.createdAt and earlier.id < event.id)
-                    )
+                    and earlier.aggregateSequence < event.aggregateSequence
               )
-            order by event.createdAt
+            order by event.createdAt, event.id
             """)
     List<UUID> findDueEventIds(@Param("now") Instant now, Pageable pageable);
 
@@ -71,4 +71,11 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
             where event.deadLettered = true
             """)
     long countDeadLettered();
+
+    @Query("""
+            select min(event.createdAt) from OutboxEvent event
+            where event.publishedAt is null
+              and event.deadLettered = false
+            """)
+    Instant findOldestUnpublishedCreatedAt();
 }

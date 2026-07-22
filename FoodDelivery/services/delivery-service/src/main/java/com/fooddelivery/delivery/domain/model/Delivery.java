@@ -306,19 +306,67 @@ public class Delivery {
     }
 
     public void cancel(String reason) {
+        cancel(reason, Instant.now());
+    }
+
+    public void cancel(String reason, Instant cancelledAt) {
+        CancelFromOrderResult result = cancelFromOrder(reason, cancelledAt);
+        if (result.afterPickup() || result.terminalNonCancel()) {
+            throw new InvalidDeliveryStateException(status);
+        }
+    }
+
+    /**
+     * Cancel from confirmed {@code OrderCancelled}. Idempotent for already-cancelled.
+     * Valid pre-pickup; post-pickup leaves state unchanged and signals alert.
+     */
+    public CancelFromOrderResult cancelFromOrder(String reason, Instant cancelledAt) {
+        Instant at = cancelledAt != null ? cancelledAt : Instant.now();
         if (status == DeliveryStatus.CANCELLED) {
-            return;
+            return CancelFromOrderResult.alreadyCancelled();
         }
         if (status == DeliveryStatus.DELIVERED || status == DeliveryStatus.FAILED) {
-            throw new InvalidDeliveryStateException(status);
+            return CancelFromOrderResult.terminalNonCancel(status);
         }
         if (status == DeliveryStatus.PICKED_UP || status == DeliveryStatus.DELIVERING) {
-            throw new InvalidDeliveryStateException(status);
+            return CancelFromOrderResult.afterPickup(status);
         }
+        // PENDING, FINDING_DRIVER, DRIVER_ASSIGNED
+        UUID reservedDriver = this.driverId;
         this.status = DeliveryStatus.CANCELLED;
-        this.failureReason = truncate(reason, 1000);
+        this.failureReason = truncate(reason == null ? "Order cancelled" : reason, 1000);
         this.nextAssignmentAt = null;
-        this.updatedAt = Instant.now();
+        this.updatedAt = at;
+        boolean release = reservedDriver != null;
+        return CancelFromOrderResult.cancelled(release, reservedDriver);
+    }
+
+    /**
+     * Result of {@link #cancelFromOrder(String, Instant)}.
+     */
+    public record CancelFromOrderResult(
+            boolean mutated,
+            boolean releaseDriver,
+            UUID driverId,
+            boolean afterPickup,
+            boolean terminalNonCancel,
+            DeliveryStatus observedStatus) {
+
+        public static CancelFromOrderResult alreadyCancelled() {
+            return new CancelFromOrderResult(false, false, null, false, false, DeliveryStatus.CANCELLED);
+        }
+
+        public static CancelFromOrderResult cancelled(boolean releaseDriver, UUID driverId) {
+            return new CancelFromOrderResult(true, releaseDriver, driverId, false, false, DeliveryStatus.CANCELLED);
+        }
+
+        public static CancelFromOrderResult afterPickup(DeliveryStatus status) {
+            return new CancelFromOrderResult(false, false, null, true, false, status);
+        }
+
+        public static CancelFromOrderResult terminalNonCancel(DeliveryStatus status) {
+            return new CancelFromOrderResult(false, false, null, false, true, status);
+        }
     }
 
     public boolean isActiveAssignment() {

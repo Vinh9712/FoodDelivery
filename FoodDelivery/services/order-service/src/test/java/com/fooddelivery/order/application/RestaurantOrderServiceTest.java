@@ -1,13 +1,16 @@
 package com.fooddelivery.order.application;
 
+import com.fooddelivery.commonevents.order.OrderEventPayloads;
 import com.fooddelivery.order.domain.exception.InvalidOrderStateException;
 import com.fooddelivery.order.domain.exception.OrderNotFoundException;
 import com.fooddelivery.order.domain.model.Order;
+import com.fooddelivery.order.domain.model.valueobject.CancellationCode;
 import com.fooddelivery.order.domain.model.valueobject.OrderStatus;
 import com.fooddelivery.order.domain.model.valueobject.PickupAddressSnapshot;
 import com.fooddelivery.order.domain.model.valueobject.RefundStatus;
 import com.fooddelivery.order.infrastructure.repository.OrderRepository;
 import com.fooddelivery.order.infrastructure.repository.OutboxEventRepository;
+import com.fooddelivery.order.saga.OrderCompensationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,6 +33,10 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -48,12 +55,28 @@ class RestaurantOrderServiceTest {
     private OutboxEventRepository outboxEventRepository;
     @Mock
     private ApplicationEventPublisher events;
+    @Mock
+    private OrderCompensationService compensationService;
 
     private RestaurantOrderService service;
 
     @BeforeEach
     void setUp() {
-        service = new RestaurantOrderService(orderRepository, outboxEventRepository, events);
+        service = new RestaurantOrderService(orderRepository, outboxEventRepository, events, compensationService);
+        lenient().doAnswer(inv -> {
+            UUID orderId = inv.getArgument(0);
+            CancellationCode code = inv.getArgument(1);
+            String reason = inv.getArgument(2);
+            OrderEventPayloads.Source source = inv.getArgument(3);
+            Order order = orderRepository.findById(orderId).orElseThrow();
+            order.beginCompensation(reason, code, source, Instant.parse("2026-07-22T12:00:00Z"));
+            if (!order.getPendingOutboxEvents().isEmpty()) {
+                outboxEventRepository.saveAll(order.getPendingOutboxEvents());
+                order.clearPendingOutboxEvents();
+            }
+            orderRepository.save(order);
+            return null;
+        }).when(compensationService).start(any(), any(), any(), any());
     }
 
     @Test
@@ -139,6 +162,11 @@ class RestaurantOrderServiceTest {
         assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELLATION_PENDING);
         assertThat(result.getRefundStatus()).isEqualTo(RefundStatus.PENDING);
         assertThat(result.getCancellationReason()).isEqualTo("Kitchen capacity exceeded");
+        verify(compensationService).start(
+                eq(order.getId()),
+                eq(CancellationCode.RESTAURANT_REJECTED),
+                eq("Kitchen capacity exceeded"),
+                eq(OrderEventPayloads.Source.RESTAURANT));
         verify(outboxEventRepository).saveAll(any());
         verifyNoInteractions(events);
     }
@@ -152,17 +180,27 @@ class RestaurantOrderServiceTest {
         Order result = service.reject(order.getId(), ownerId, "Closed early");
 
         assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELLATION_PENDING);
+        verify(compensationService).start(
+                eq(order.getId()),
+                eq(CancellationCode.RESTAURANT_REJECTED),
+                eq("Closed early"),
+                eq(OrderEventPayloads.Source.RESTAURANT));
         verify(outboxEventRepository).saveAll(any());
     }
 
     @Test
     void rejectFromPreparingIsConflict() {
         Order order = preparingOrder();
-        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        doThrow(new InvalidOrderStateException("Cannot request cancellation"))
+                .when(compensationService).start(any(), any(), any(), any());
 
         assertThatThrownBy(() -> service.reject(order.getId(), ownerId, "too late"))
                 .isInstanceOf(InvalidOrderStateException.class);
-        verify(orderRepository, never()).save(any());
+        verify(compensationService).start(
+                eq(order.getId()),
+                eq(CancellationCode.RESTAURANT_REJECTED),
+                eq("too late"),
+                eq(OrderEventPayloads.Source.RESTAURANT));
         verifyNoInteractions(events);
     }
 

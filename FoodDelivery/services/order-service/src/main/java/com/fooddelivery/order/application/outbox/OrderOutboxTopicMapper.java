@@ -14,7 +14,8 @@ public class OrderOutboxTopicMapper {
         return switch (eventType) {
             case EventContracts.ORDER_CREATED,
                  EventContracts.ORDER_STATUS_CHANGED,
-                 EventContracts.ORDER_CANCELLED -> EventContracts.ORDER_EVENTS_V1;
+                 EventContracts.ORDER_CANCELLED,
+                 EventContracts.ORDER_REFUND_STATUS_CHANGED -> EventContracts.ORDER_EVENTS_V1;
             default -> throw new IllegalArgumentException("Unsupported order event type: " + eventType);
         };
     }

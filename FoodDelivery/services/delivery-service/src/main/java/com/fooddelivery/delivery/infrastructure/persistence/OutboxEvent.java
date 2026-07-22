@@ -139,8 +139,13 @@ public class OutboxEvent {
         this.nextAttemptAt = null;
     }
 
+    /** published_at is the canonical success marker; boolean published is kept for migration compatibility. */
+    public boolean isPublished() {
+        return publishedAt != null || published;
+    }
+
     public boolean canPublish(Instant now) {
-        return !published && !deadLettered
+        return publishedAt == null && !deadLettered
                 && (nextAttemptAt == null || !nextAttemptAt.isAfter(now));
     }
 

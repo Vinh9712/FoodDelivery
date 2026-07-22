@@ -33,12 +33,14 @@ public class OrderOutboxPublisher {
     private final Duration retryBaseDelay;
     private final Duration retryMaxDelay;
     private final int maxAttempts;
+    private final OrderOutboxMetrics metrics;
 
     public OrderOutboxPublisher(
             OutboxEventRepository outboxEventRepository,
             KafkaTemplate<String, Object> kafkaTemplate,
             OrderOutboxTopicMapper topicMapper,
             ObjectMapper objectMapper,
+            org.springframework.beans.factory.ObjectProvider<OrderOutboxMetrics> metrics,
             @Value("${app.order.outbox.relay.send-timeout:5s}") Duration sendTimeout,
             @Value("${app.order.outbox.relay.retry-base-delay:5s}") Duration retryBaseDelay,
             @Value("${app.order.outbox.relay.retry-max-delay:5m}") Duration retryMaxDelay,
@@ -47,6 +49,7 @@ public class OrderOutboxPublisher {
         this.kafkaTemplate = kafkaTemplate;
         this.topicMapper = topicMapper;
         this.objectMapper = objectMapper;
+        this.metrics = metrics.getIfAvailable();
         this.sendTimeout = sendTimeout;
         this.retryBaseDelay = retryBaseDelay;
         this.retryMaxDelay = retryMaxDelay;
@@ -94,11 +97,17 @@ public class OrderOutboxPublisher {
         int nextAttempt = event.getAttempts() + 1;
         if (nextAttempt >= maxAttempts) {
             event.markDeadLettered(error);
+            if (metrics != null) {
+                metrics.recordDeadLetter();
+            }
             log.error("Order outbox event {} moved to dead letter after {} attempts: {}",
                     event.getId(), nextAttempt, error);
         } else {
             Instant retryAt = now.plus(backoffFor(nextAttempt));
             event.recordFailure(error, retryAt);
+            if (metrics != null) {
+                metrics.recordPublishRetry();
+            }
             log.warn("Order outbox event {} failed; retry {} scheduled at {}: {}",
                     event.getId(), nextAttempt, retryAt, error);
         }

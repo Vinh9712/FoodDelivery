@@ -10,6 +10,7 @@ import com.fooddelivery.commonevents.delivery.DeliveryEventPayloads.DriverAssign
 import com.fooddelivery.commonevents.delivery.DeliveryEventPayloads.DriverSnapshot;
 import com.fooddelivery.commonevents.order.OrderEventPayloads.OrderCreated;
 import com.fooddelivery.commonevents.order.OrderEventPayloads.OrderCancelled;
+import com.fooddelivery.commonevents.order.OrderEventPayloads.OrderRefundStatusChanged;
 import com.fooddelivery.commonevents.order.OrderEventPayloads.OrderStatusChanged;
 import com.fooddelivery.commonevents.payment.PaymentEventPayloads.PaymentFailed;
 import com.fooddelivery.commonevents.payment.PaymentEventPayloads.PaymentRefunded;
@@ -117,6 +118,7 @@ class IntegrationEventContractTest {
                 new GuardCase("OrderCreated.orderId", () -> new OrderCreated(null, id, id, "1.00", "VND", now)),
                 new GuardCase("OrderStatusChanged.source", () -> new OrderStatusChanged(id, id, id, "A", "B", null, now)),
                 new GuardCase("OrderCancelled.cancellationCode", () -> new OrderCancelled(id, id, id, " ", "reason", "PAID", "NONE", now)),
+                new GuardCase("OrderRefundStatusChanged.fromRefundStatus", () -> new OrderRefundStatusChanged(id, id, " ", "PENDING", "reason", now)),
                 new GuardCase("DriverSnapshot.fullName", () -> new DriverSnapshot(id, "", "0900000000", "Motorbike", "59A-000.00")),
                 new GuardCase("DriverAssigned.driver", () -> new DriverAssigned(id, id, id, null, now)),
                 new GuardCase("DeliveryPickedUp.driverId", () -> new DeliveryPickedUp(id, id, id, null, now)),

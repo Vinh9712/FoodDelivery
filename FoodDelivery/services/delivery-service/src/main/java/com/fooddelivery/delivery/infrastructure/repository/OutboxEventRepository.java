@@ -26,12 +26,24 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
 
     List<OutboxEvent> findByPublishedFalseOrderByOccurredAtAsc();
 
+    /**
+     * Due IDs for the head of each aggregate unpublished chain.
+     * published_at is the canonical success marker; earlier unpublished rows
+     * (including dead-lettered) block later sequences on the same aggregate.
+     */
     @Query("""
             select event.id from OutboxEvent event
-            where event.published = false
+            where event.publishedAt is null
               and event.deadLettered = false
               and (event.nextAttemptAt is null or event.nextAttemptAt <= :now)
-            order by event.occurredAt
+              and not exists (
+                  select 1 from OutboxEvent earlier
+                  where earlier.aggregateType = event.aggregateType
+                    and earlier.aggregateId = event.aggregateId
+                    and earlier.publishedAt is null
+                    and earlier.aggregateSequence < event.aggregateSequence
+              )
+            order by event.occurredAt, event.id
             """)
     List<UUID> findDueEventIds(@Param("now") Instant now, Pageable pageable);
 
@@ -42,7 +54,7 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
 
     @Query("""
             select count(event) from OutboxEvent event
-            where event.published = false
+            where event.publishedAt is null
               and event.deadLettered = false
               and event.attempts = 0
             """)
@@ -50,7 +62,7 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
 
     @Query("""
             select count(event) from OutboxEvent event
-            where event.published = false
+            where event.publishedAt is null
               and event.deadLettered = false
               and event.attempts > 0
             """)
@@ -61,4 +73,11 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
             where event.deadLettered = true
             """)
     long countDeadLettered();
+
+    @Query("""
+            select min(event.occurredAt) from OutboxEvent event
+            where event.publishedAt is null
+              and event.deadLettered = false
+            """)
+    Instant findOldestUnpublishedOccurredAt();
 }

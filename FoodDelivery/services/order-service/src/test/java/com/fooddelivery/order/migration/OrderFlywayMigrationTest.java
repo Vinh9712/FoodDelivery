@@ -40,10 +40,8 @@ class OrderFlywayMigrationTest {
         insertLegacyOutboxEvent(firstEvent, aggregateId, "2026-07-22T00:00:00Z");
         insertLegacyOutboxEvent(secondEvent, aggregateId, "2026-07-22T00:01:00Z");
 
-        Flyway latest = flyway();
-        latest.migrate();
-
-        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("8");
+        migrateTo("8");
+        assertThat(flyway().info().current().getVersion().getVersion()).isEqualTo("8");
         assertThat(columnExists("outbox_events", "attempts")).isTrue();
         assertThat(columnExists("outbox_events", "next_attempt_at")).isTrue();
         assertThat(columnExists("outbox_events", "last_error")).isTrue();
@@ -68,9 +66,33 @@ class OrderFlywayMigrationTest {
         assertThat(outboxPartitionKey(firstEvent)).isEqualTo(aggregateId.toString());
         assertThat(orderEventSequence(aggregateId)).isEqualTo(2L);
 
+        Flyway latest = flyway();
+        latest.migrate();
+        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("12");
+        assertThat(indexExists("idx_order_outbox_due_sequence")).isTrue();
+        assertThat(constraintExists("uq_order_outbox_aggregate_sequence")).isTrue();
+        assertThat(tableExists("consumed_aggregate_sequences")).isTrue();
+        assertThat(tableExists("deferred_integration_events")).isTrue();
+        assertThat(constraintExists("uq_deferred_consumer_event")).isTrue();
+        assertThat(constraintExists("uq_deferred_consumer_aggregate_sequence")).isTrue();
+        assertThat(indexExists("idx_deferred_due")).isTrue();
+        assertThat(columnExists("orders", "refund_attempts")).isTrue();
+        assertThat(columnExists("orders", "next_refund_attempt_at")).isTrue();
+        assertThat(columnExists("orders", "last_refund_error")).isTrue();
+        assertThat(indexExists("idx_orders_refund_reconcile")).isTrue();
+        assertThat(columnExists("orders", "delivery_id")).isTrue();
+        assertThat(columnExists("orders", "delivery_schedule_attempts")).isTrue();
+        assertThat(columnExists("orders", "next_delivery_schedule_attempt_at")).isTrue();
+        assertThat(columnExists("orders", "last_delivery_schedule_error")).isTrue();
+        assertThat(indexExists("idx_orders_delivery_reconcile")).isTrue();
+
         assertThatCode(this::validateOutboxEntitySchema)
-                .as("Hibernate ddl-auto=validate must succeed for OutboxEvent after V7")
+                .as("Hibernate ddl-auto=validate must succeed for OutboxEvent after V12")
                 .doesNotThrowAnyException();
+    }
+
+    private boolean tableExists(String table) throws Exception {
+        return exists("SELECT 1 FROM information_schema.tables WHERE table_name = '" + table + "'");
     }
 
     private void insertLegacyOutboxEvent(UUID id, UUID aggregateId, String createdAt) throws Exception {

@@ -37,10 +37,13 @@ public interface PaymentServiceClient {
 
     /**
      * Gọi API hoàn tiền (compensating transaction).
+     * Stable key: {@code refund:{orderId}}.
      *
-     * @param request chứa orderId, amount
+     * @param request gồm orderId, amount
      * @return kết quả hoàn tiền (REFUNDED)
      */
     @PostMapping("/internal/v1/payments/refund")
-    RefundResponse refundPayment(@RequestBody RefundRequest request);
+    RefundResponse refundPayment(
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @RequestBody RefundRequest request);
 }

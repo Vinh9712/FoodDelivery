@@ -9,6 +9,7 @@ import com.fooddelivery.order.domain.model.valueobject.OrderStatus;
 import com.fooddelivery.order.domain.model.valueobject.PickupAddressSnapshot;
 import com.fooddelivery.order.infrastructure.repository.OrderRepository;
 import com.fooddelivery.order.infrastructure.repository.OutboxEventRepository;
+import com.fooddelivery.order.saga.OrderCompensationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -25,6 +26,7 @@ public class RestaurantOrderService {
     private final OrderRepository orderRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final ApplicationEventPublisher events;
+    private final OrderCompensationService compensationService;
 
     public record OrderReadyForPickup(
             UUID orderId,
@@ -69,13 +71,13 @@ public class RestaurantOrderService {
 
     @Transactional
     public Order reject(UUID orderId, UUID actorId, String reason) {
-        Order order = load(orderId);
-        order.requestCancellation(
-                reason,
+        // Durable compensation: CANCELLATION_PENDING + refund workflow (not direct cancel)
+        compensationService.start(
+                orderId,
                 CancellationCode.RESTAURANT_REJECTED,
+                reason,
                 OrderEventPayloads.Source.RESTAURANT);
-        persist(order);
-        return order;
+        return load(orderId);
     }
 
     @Transactional(readOnly = true)

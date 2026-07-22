@@ -130,6 +130,33 @@ public class DeliveryLifecycleService {
         return delivery;
     }
 
+    /**
+     * Cancel delivery when order is confirmed cancelled. Pre-pickup only; does not emit DeliveryFailed.
+     * No delivery row → no-op success (e.g. cancelled before schedule).
+     */
+    @Transactional
+    public Delivery.CancelFromOrderResult cancelFromOrder(UUID orderId, String reason) {
+        Delivery delivery = deliveryRepository.findByOrderIdForUpdate(orderId).orElse(null);
+        if (delivery == null) {
+            log.info("OrderCancelled for order {} with no delivery — advancing as no-op", orderId);
+            return Delivery.CancelFromOrderResult.alreadyCancelled();
+        }
+        Instant at = clock.instant();
+        Delivery.CancelFromOrderResult result = delivery.cancelFromOrder(reason, at);
+        if (result.mutated()) {
+            deliveryRepository.save(delivery);
+            if (result.releaseDriver()) {
+                assignmentService.releaseDriverIfIdle(result.driverId(), delivery.getId());
+            }
+            log.info("Delivery {} cancelled from OrderCancelled (order {})", delivery.getId(), orderId);
+        } else if (result.afterPickup()) {
+            log.warn(
+                    "OrderCancelled for order {} but delivery {} already {} — leaving delivery unchanged",
+                    orderId, delivery.getId(), delivery.getStatus());
+        }
+        return result;
+    }
+
     @Transactional(readOnly = true)
     public Delivery getDelivery(UUID deliveryId) {
         return deliveryRepository.findById(deliveryId)

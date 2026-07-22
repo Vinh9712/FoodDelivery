@@ -77,6 +77,11 @@ app:
     outbox:
       relay:
         enabled: false
+    inbox:
+      deferred-drain:
+        enabled: false
+      gap-window: 10m
+      deferred-scan-delay: 15s
     kafka:
       order-events-topic: order.events.v1
       delivery-events-topic: delivery.events.v1

@@ -35,17 +35,33 @@ class PaymentFlywayMigrationTest {
     @Test
     void upgradesExistingPaymentSchemaAndAddsOutboxRetryMetadata() throws Exception {
         migrateTo("5");
-        Flyway latest = flyway();
-        latest.migrate();
-
-        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("6");
+        migrateTo("6");
+        assertThat(flyway().info().current().getVersion().getVersion()).isEqualTo("6");
         assertThat(columnExists("outbox_events", "next_attempt_at")).isTrue();
         assertThat(columnExists("outbox_events", "dead_lettered")).isTrue();
         assertThat(indexExists("idx_payment_outbox_due")).isTrue();
 
+        Flyway latest = flyway();
+        latest.migrate();
+        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("8");
+        assertThat(columnExists("payments", "event_sequence")).isTrue();
+        assertThat(columnExists("outbox_events", "event_version")).isTrue();
+        assertThat(columnExists("outbox_events", "aggregate_sequence")).isTrue();
+        assertThat(columnExists("outbox_events", "partition_key")).isTrue();
+        assertThat(constraintExists("uq_payment_outbox_aggregate_sequence")).isTrue();
+        assertThat(indexExists("idx_payment_outbox_due_sequence")).isTrue();
+        assertThat(columnExists("refunds", "idempotency_key")).isTrue();
+        assertThat(columnExists("refunds", "request_hash")).isTrue();
+        assertThat(constraintExists("uq_refunds_idempotency_key")).isTrue();
+        assertThat(constraintExists("uq_refunds_payment")).isTrue();
+
         assertThatCode(this::validateHibernateSchema)
-                .as("Hibernate ddl-auto=validate must succeed on schema after V6")
+                .as("Hibernate ddl-auto=validate must succeed on schema after V8")
                 .doesNotThrowAnyException();
+    }
+
+    private boolean constraintExists(String constraint) throws Exception {
+        return exists("SELECT 1 FROM pg_constraint WHERE conname = '" + constraint + "'");
     }
 
     private void migrateTo(String version) {

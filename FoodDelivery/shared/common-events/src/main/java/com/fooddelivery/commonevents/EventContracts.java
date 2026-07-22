@@ -9,6 +9,7 @@ public final class EventContracts {
     public static final String ORDER_CREATED = "OrderCreated";
     public static final String ORDER_STATUS_CHANGED = "OrderStatusChanged";
     public static final String ORDER_CANCELLED = "OrderCancelled";
+    public static final String ORDER_REFUND_STATUS_CHANGED = "OrderRefundStatusChanged";
     public static final String DRIVER_ASSIGNED = "DriverAssigned";
     public static final String DELIVERY_PICKED_UP = "DeliveryPickedUp";
     public static final String DELIVERY_IN_TRANSIT = "DeliveryInTransit";

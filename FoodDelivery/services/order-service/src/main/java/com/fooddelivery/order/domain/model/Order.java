@@ -113,6 +113,28 @@ public class Order {
     @Column(name = "event_sequence", nullable = false)
     private long eventSequence;
 
+    /** Delivery aggregate id observed via schedule response or reconciliation lookup. */
+    @Column(name = "delivery_id")
+    private UUID deliveryId;
+
+    @Column(name = "delivery_schedule_attempts", nullable = false)
+    private int deliveryScheduleAttempts;
+
+    @Column(name = "next_delivery_schedule_attempt_at")
+    private Instant nextDeliveryScheduleAttemptAt;
+
+    @Column(name = "last_delivery_schedule_error", length = 1000)
+    private String lastDeliveryScheduleError;
+
+    @Column(name = "refund_attempts", nullable = false)
+    private int refundAttempts;
+
+    @Column(name = "next_refund_attempt_at")
+    private Instant nextRefundAttemptAt;
+
+    @Column(name = "last_refund_error", length = 1000)
+    private String lastRefundError;
+
     @Column(name = "promotion_code", length = 50)
     private String promotionCode;
 
@@ -197,6 +219,8 @@ public class Order {
         order.totalAmount = BigDecimal.ZERO;
         order.paymentStatus = PaymentStatus.PENDING;
         order.refundStatus = RefundStatus.NOT_REQUIRED;
+        order.deliveryScheduleAttempts = 0;
+        order.refundAttempts = 0;
         order.pickupAddressSnapshot = pickupAddressSnapshot;
         if (pickupAddressSnapshot != null && !restaurantId.equals(pickupAddressSnapshot.restaurantId())) {
             throw new IllegalArgumentException("pickup snapshot restaurantId must match order restaurantId");
@@ -241,6 +265,8 @@ public class Order {
         order.note = note;
         order.paymentStatus = PaymentStatus.PENDING;
         order.refundStatus = RefundStatus.NOT_REQUIRED;
+        order.deliveryScheduleAttempts = 0;
+        order.refundAttempts = 0;
 
         BigDecimal sub = BigDecimal.ZERO;
         for (OrderItem item : items) {
@@ -272,6 +298,8 @@ public class Order {
         this.discountAmount = BigDecimal.ZERO;
         this.paymentStatus = PaymentStatus.PENDING;
         this.refundStatus = RefundStatus.NOT_REQUIRED;
+        this.deliveryScheduleAttempts = 0;
+        this.refundAttempts = 0;
         this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
     }
@@ -375,32 +403,157 @@ public class Order {
     }
 
     public void requestCancellation(String reason, CancellationCode code, OrderEventPayloads.Source source) {
+        beginCompensation(reason, code, source, Instant.now());
+    }
+
+    /**
+     * Eligibility for restaurant acceptance timeout: still {@code PAID} and deadline has elapsed.
+     * Does not mutate state — caller must invoke compensation when this returns true.
+     * Uses {@code deadline <= now} (deadline equal to now is overdue).
+     */
+    public boolean requestCancellationIfRestaurantTimedOut(Instant now) {
+        Objects.requireNonNull(now, "now is required");
+        return status == OrderStatus.PAID
+                && restaurantResponseDeadline != null
+                && !now.isBefore(restaurantResponseDeadline);
+    }
+
+    public void markRefundSucceeded(Instant refundedAt) {
+        confirmRefund(null, null, null, refundedAt);
+    }
+
+    /**
+     * Confirms a completed remote refund. Idempotent for already-cancelled/refunded orders.
+     * Emits {@code OrderRefundStatusChanged} then {@code OrderCancelled} once.
+     */
+    public void confirmRefund(UUID paymentId, UUID refundId, BigDecimal amount, Instant refundedAt) {
+        Objects.requireNonNull(refundedAt, "refundedAt is required");
+        if (status == OrderStatus.CANCELLED
+                && paymentStatus == PaymentStatus.REFUNDED
+                && refundStatus == RefundStatus.SUCCEEDED) {
+            return;
+        }
+        if (status != OrderStatus.CANCELLATION_PENDING && status != OrderStatus.CANCELLED) {
+            throw new InvalidOrderStateException(
+                    "Refund confirmation requires CANCELLATION_PENDING; was " + status);
+        }
+        RefundStatus fromRefund = this.refundStatus;
+        if (fromRefund != RefundStatus.SUCCEEDED) {
+            this.refundStatus = RefundStatus.SUCCEEDED;
+            registerOutboxEvent("OrderRefundStatusChanged", Map.of(
+                    "orderId", this.id.toString(),
+                    "customerId", this.customerId.toString(),
+                    "fromRefundStatus", fromRefund.name(),
+                    "toRefundStatus", RefundStatus.SUCCEEDED.name(),
+                    "reason", cancellationReason != null ? cancellationReason : "Refund confirmed",
+                    "changedAt", refundedAt.toString()));
+        }
+        this.paymentStatus = PaymentStatus.REFUNDED;
+        this.nextRefundAttemptAt = null;
+        this.lastRefundError = null;
+        if (status == OrderStatus.CANCELLATION_PENDING) {
+            if (!forwardTransition(OrderStatus.CANCELLATION_PENDING, OrderStatus.CANCELLED, "Refund succeeded", null,
+                    refundedAt, OrderEventPayloads.Source.COMPENSATION)) {
+                return;
+            }
+            registerCancellationEvent(refundedAt);
+        }
+    }
+
+    /**
+     * Attach observed delivery id without changing fulfillment status.
+     * Clears schedule-retry metadata after positive remote observation.
+     */
+    public void attachDelivery(UUID observedDeliveryId) {
+        this.deliveryId = Objects.requireNonNull(observedDeliveryId, "deliveryId is required");
+        clearDeliveryScheduleRetryMetadata();
+        this.updatedAt = Instant.now();
+    }
+
+    public void recordDeliveryScheduleFailure(String error, Instant nextAttemptAt, Instant failedAt) {
+        this.deliveryScheduleAttempts++;
+        this.lastDeliveryScheduleError = truncateError(error);
+        this.nextDeliveryScheduleAttemptAt = Objects.requireNonNull(nextAttemptAt, "nextAttemptAt is required");
+        this.updatedAt = Objects.requireNonNull(failedAt, "failedAt is required");
+    }
+
+    public void clearDeliveryScheduleRetryMetadata() {
+        this.deliveryScheduleAttempts = 0;
+        this.nextDeliveryScheduleAttemptAt = null;
+        this.lastDeliveryScheduleError = null;
+    }
+
+    public void scheduleFirstRefundAttempt(Instant nextAttemptAt) {
+        this.refundAttempts = 0;
+        this.nextRefundAttemptAt = Objects.requireNonNull(nextAttemptAt, "nextAttemptAt is required");
+        this.lastRefundError = null;
+    }
+
+    public void recordRefundAttemptFailure(String error, Instant nextAttemptAt, Instant failedAt) {
+        this.refundAttempts++;
+        this.lastRefundError = truncateError(error);
+        this.nextRefundAttemptAt = nextAttemptAt;
+        this.updatedAt = Objects.requireNonNull(failedAt, "failedAt is required");
+    }
+
+    public void markRefundManualReview(String reason, Instant changedAt) {
+        if (this.refundStatus == RefundStatus.MANUAL_REVIEW) {
+            return;
+        }
+        if (this.refundStatus != RefundStatus.PENDING) {
+            throw new InvalidOrderStateException(
+                    "Manual review is only valid from PENDING refund status; was " + this.refundStatus);
+        }
+        this.refundStatus = RefundStatus.MANUAL_REVIEW;
+        this.nextRefundAttemptAt = null;
+        this.lastRefundError = truncateError(reason);
+        this.updatedAt = Objects.requireNonNull(changedAt, "changedAt is required");
+        registerOutboxEvent("OrderRefundStatusChanged", Map.of(
+                "orderId", this.id.toString(),
+                "customerId", this.customerId.toString(),
+                "fromRefundStatus", RefundStatus.PENDING.name(),
+                "toRefundStatus", RefundStatus.MANUAL_REVIEW.name(),
+                "reason", reason != null ? reason : "Refund retry exhausted",
+                "changedAt", changedAt.toString()));
+    }
+
+    /**
+     * Begins compensation: CANCELLATION_PENDING + RefundStatus.PENDING.
+     * Never sets PaymentStatus.REFUNDED. Idempotent when already pending.
+     */
+    public void beginCompensation(String reason, CancellationCode code, OrderEventPayloads.Source source,
+                                  Instant changedAt) {
+        Objects.requireNonNull(changedAt, "changedAt is required");
+        if (status == OrderStatus.CANCELLATION_PENDING) {
+            return;
+        }
+        if (status == OrderStatus.CANCELLED) {
+            return;
+        }
         String normalizedReason = normalizedReason(reason);
         Objects.requireNonNull(code, "cancellationCode is required");
         requireCancellationSource(code, source);
-        if (status == OrderStatus.CANCELLATION_PENDING) {
-            return; // idempotent: no second status event or refund flip
-        }
         if (!isCancellationAllowed(status, code)) {
             throw new InvalidOrderStateException(
                     "Cannot request cancellation with code " + code + " in status: " + status);
         }
-        if (!forwardTransition(status, OrderStatus.CANCELLATION_PENDING, normalizedReason, null, Instant.now(), source)) {
+        OrderStatus from = this.status;
+        if (!forwardTransition(from, OrderStatus.CANCELLATION_PENDING, normalizedReason, null, changedAt, source)) {
             return;
         }
         this.cancellationCode = code;
         this.cancellationReason = normalizedReason;
+        RefundStatus fromRefund = this.refundStatus;
         this.refundStatus = RefundStatus.PENDING;
-    }
-
-    public void markRefundSucceeded(Instant refundedAt) {
-        if (!forwardTransition(OrderStatus.CANCELLATION_PENDING, OrderStatus.CANCELLED, "Refund succeeded", null,
-                Objects.requireNonNull(refundedAt, "refundedAt is required"), OrderEventPayloads.Source.COMPENSATION)) {
-            return;
+        if (fromRefund != RefundStatus.PENDING) {
+            registerOutboxEvent("OrderRefundStatusChanged", Map.of(
+                    "orderId", this.id.toString(),
+                    "customerId", this.customerId.toString(),
+                    "fromRefundStatus", fromRefund.name(),
+                    "toRefundStatus", RefundStatus.PENDING.name(),
+                    "reason", normalizedReason,
+                    "changedAt", changedAt.toString()));
         }
-        this.paymentStatus = PaymentStatus.REFUNDED;
-        this.refundStatus = RefundStatus.SUCCEEDED;
-        registerCancellationEvent(refundedAt);
     }
 
 
@@ -633,8 +786,24 @@ public class Order {
 
     /** Đăng ký outbox event vào danh sách chờ */
     private void registerOutboxEvent(String eventType, Map<String, Object> payload) {
-        long sequence = ++eventSequence;
+        long sequence = nextEventSequence();
         pendingOutboxEvents.add(OutboxEvent.create(
                 "Order", this.id, eventType, 1, sequence, this.id.toString(), payload));
+    }
+
+    /**
+     * Allocates the next monotonic outbox sequence for this order aggregate.
+     * Sequence is owned by the aggregate transaction — never by the relay.
+     */
+    private long nextEventSequence() {
+        return ++eventSequence;
+    }
+
+    private static String truncateError(String error) {
+        if (error == null || error.isBlank()) {
+            return "unknown";
+        }
+        String trimmed = error.trim();
+        return trimmed.length() <= 1000 ? trimmed : trimmed.substring(0, 1000);
     }
 }

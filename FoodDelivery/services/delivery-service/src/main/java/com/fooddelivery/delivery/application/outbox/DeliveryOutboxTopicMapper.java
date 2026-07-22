@@ -15,13 +15,7 @@ public class DeliveryOutboxTopicMapper {
                  EventContracts.DELIVERY_PICKED_UP,
                  EventContracts.DELIVERY_IN_TRANSIT,
                  EventContracts.DELIVERY_COMPLETED,
-                 EventContracts.DELIVERY_FAILED,
-                 // legacy aliases during cutover
-                 "driver.assigned",
-                 "delivery.picked-up",
-                 "delivery.in-transit",
-                 "delivery.completed",
-                 "delivery.failed" -> EventContracts.DELIVERY_EVENTS_V1;
+                 EventContracts.DELIVERY_FAILED -> EventContracts.DELIVERY_EVENTS_V1;
             default -> throw new IllegalArgumentException("Unsupported delivery event type: " + eventType);
         };
     }

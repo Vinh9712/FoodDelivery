@@ -58,9 +58,8 @@ class DeliveryFlywayMigrationTest {
         assertThat(columnExists("deliveries", "customer_id")).isTrue();
         assertThat(indexExists("idx_deliveries_assignment_due")).isTrue();
 
-        Flyway latest = flyway();
-        latest.migrate();
-        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("8");
+        migrateTo("8");
+        assertThat(flyway().info().current().getVersion().getVersion()).isEqualTo("8");
         assertThat(columnExists("deliveries", "restaurant_id")).isTrue();
         assertThat(columnExists("deliveries", "schedule_request_hash")).isTrue();
         assertThat(columnExists("deliveries", "schedule_idempotency_key")).isTrue();
@@ -71,8 +70,14 @@ class DeliveryFlywayMigrationTest {
         assertThat(indexExists("uq_deliveries_schedule_idempotency_key")).isTrue();
         assertThat(constraintExists("uq_delivery_outbox_aggregate_sequence")).isTrue();
 
+        Flyway latest = flyway();
+        latest.migrate();
+        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("9");
+        assertThat(indexExists("idx_delivery_outbox_due_sequence")).isTrue();
+        assertThat(constraintExists("uq_delivery_outbox_aggregate_sequence")).isTrue();
+
         assertThatCode(this::validateHibernateSchema)
-                .as("Hibernate ddl-auto=validate must succeed on schema after V8")
+                .as("Hibernate ddl-auto=validate must succeed on schema after V9")
                 .doesNotThrowAnyException();
     }
 

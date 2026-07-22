@@ -244,11 +244,16 @@ class OrderOutboxPublisherTest {
             OutboxEventRepository repository,
             KafkaTemplate<String, Object> kafkaTemplate,
             int maxAttempts) {
+        @SuppressWarnings("unchecked")
+        org.springframework.beans.factory.ObjectProvider<OrderOutboxMetrics> metrics =
+                mock(org.springframework.beans.factory.ObjectProvider.class);
+        when(metrics.getIfAvailable()).thenReturn(null);
         return new OrderOutboxPublisher(
                 repository,
                 kafkaTemplate,
                 new OrderOutboxTopicMapper(),
                 objectMapper,
+                metrics,
                 Duration.ofSeconds(2),
                 Duration.ofSeconds(1),
                 Duration.ofMinutes(1),

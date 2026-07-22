@@ -32,6 +32,16 @@ public final class OrderEventPayloads {
         }
     }
 
+    public record OrderRefundStatusChanged(UUID orderId, UUID customerId,
+                                           String fromRefundStatus, String toRefundStatus,
+                                           String reason, Instant changedAt) {
+        public OrderRefundStatusChanged {
+            required(orderId, "orderId"); required(customerId, "customerId");
+            text(fromRefundStatus, "fromRefundStatus"); text(toRefundStatus, "toRefundStatus");
+            text(reason, "reason"); required(changedAt, "changedAt");
+        }
+    }
+
     private static void required(Object value, String name) { if (value == null) throw new IllegalArgumentException(name + " is required"); }
     private static void text(String value, String name) { if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " is required"); }
     private static void decimal(String value, String name) { text(value, name); try { if (!new java.math.BigDecimal(value).toPlainString().equals(value)) throw new NumberFormatException(); } catch (NumberFormatException exception) { throw new IllegalArgumentException(name + " must be a canonical decimal string"); } }

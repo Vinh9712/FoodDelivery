@@ -1,39 +1,47 @@
 package com.fooddelivery.order.application.listener;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fooddelivery.commonevents.EventContracts;
+import com.fooddelivery.commonevents.IntegrationEventEnvelope;
+import com.fooddelivery.order.application.messaging.ProcessDecision;
+import com.fooddelivery.order.application.messaging.SequencedEventHandler;
+import com.fooddelivery.order.application.messaging.SequencedEventProcessor;
+import com.fooddelivery.commonevents.order.OrderEventPayloads;
 import com.fooddelivery.order.domain.model.Order;
+import com.fooddelivery.order.domain.model.valueobject.CancellationCode;
 import com.fooddelivery.order.domain.model.valueobject.OrderStatus;
 import com.fooddelivery.order.infrastructure.repository.OrderRepository;
 import com.fooddelivery.order.infrastructure.repository.OutboxEventRepository;
-import com.fooddelivery.order.infrastructure.repository.ProcessedEventRepository;
+import com.fooddelivery.order.saga.OrderCompensationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.HashSet;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class DeliveryLifecycleEventListenerTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
-    private final Set<UUID> processedIds = new HashSet<>();
 
     private OrderRepository orderRepository;
-    private ProcessedEventRepository processedEventRepository;
     private OutboxEventRepository outboxEventRepository;
+    private SequencedEventProcessor sequencedEventProcessor;
+    private OrderCompensationService compensationService;
     private DeliveryLifecycleEventListener listener;
 
     private UUID orderId;
@@ -45,18 +53,28 @@ class DeliveryLifecycleEventListenerTest {
     @BeforeEach
     void setUp() {
         orderRepository = mock(OrderRepository.class);
-        processedEventRepository = mock(ProcessedEventRepository.class);
         outboxEventRepository = mock(OutboxEventRepository.class);
+        sequencedEventProcessor = mock(SequencedEventProcessor.class);
+        compensationService = mock(OrderCompensationService.class);
         listener = new DeliveryLifecycleEventListener(
-                orderRepository, processedEventRepository, outboxEventRepository, objectMapper);
+                orderRepository, outboxEventRepository, sequencedEventProcessor, compensationService, objectMapper);
+        doAnswer(inv -> {
+            Order o = orderRepository.findById(inv.getArgument(0)).orElseThrow();
+            o.beginCompensation(
+                    inv.getArgument(2),
+                    inv.getArgument(1),
+                    inv.getArgument(3),
+                    Instant.parse("2026-07-22T10:15:00Z"));
+            orderRepository.save(o);
+            return null;
+        }).when(compensationService).start(any(), any(), any(), any());
 
         orderId = UUID.randomUUID();
         deliveryId = UUID.randomUUID();
         customerId = UUID.randomUUID();
         driverId = UUID.randomUUID();
         order = readyOrder(customerId);
-        // Use reflection-free approach: legacy constructor creates new id — re-bind via stubbing by status path.
-        // Build READY_FOR_PICKUP order and always return the same instance from repository.
+
         when(orderRepository.findById(any())).thenAnswer(inv -> {
             UUID id = inv.getArgument(0);
             if (id.equals(order.getId()) || id.equals(orderId)) {
@@ -67,40 +85,50 @@ class DeliveryLifecycleEventListenerTest {
         when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(outboxEventRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        when(processedEventRepository.existsByEventIdAndConsumer(any(), anyString()))
-                .thenAnswer(inv -> processedIds.contains(inv.getArgument(0)));
-        doAnswer(inv -> {
-            processedIds.add(inv.getArgument(0));
-            return null;
-        }).when(processedEventRepository).markProcessed(any(), anyString());
+        // Real parse; process invokes the handler so domain mutations still run.
+        when(sequencedEventProcessor.parseAndValidate(anyString())).thenAnswer(inv ->
+                realParse(inv.getArgument(0)));
+        when(sequencedEventProcessor.process(anyString(), any(), anyString(), any()))
+                .thenAnswer(inv -> {
+                    SequencedEventHandler handler = inv.getArgument(3);
+                    IntegrationEventEnvelope<JsonNode> envelope = inv.getArgument(1);
+                    handler.apply(envelope);
+                    return ProcessDecision.APPLIED;
+                });
 
-        // Align helper orderId with the real order id for payload keys
         orderId = order.getId();
     }
 
     @Test
-    void appliesLifecycleInOrderAndDeduplicatesEventId() {
+    void routesThroughSequencedProcessorWithDeliveryConsumerName() throws Exception {
         UUID completedEventId = UUID.randomUUID();
 
         listener.onEvent(json(driverAssigned(UUID.randomUUID(), 1)));
         listener.onEvent(json(pickedUp(UUID.randomUUID(), 2)));
         listener.onEvent(json(inTransit(UUID.randomUUID(), 3)));
         listener.onEvent(json(completed(completedEventId, 4)));
-        listener.onEvent(json(completed(completedEventId, 4)));
+
+        ArgumentCaptor<String> consumerCaptor = ArgumentCaptor.forClass(String.class);
+        verify(sequencedEventProcessor, org.mockito.Mockito.atLeastOnce())
+                .process(consumerCaptor.capture(), any(), anyString(), any());
+        assertThat(consumerCaptor.getAllValues())
+                .allMatch(DeliveryLifecycleEventListener.CONSUMER_NAME::equals);
 
         Order restored = orderRepository.findById(orderId).orElseThrow();
         assertThat(restored.getStatus()).isEqualTo(OrderStatus.DELIVERED);
-        assertThat(processedIds).hasSize(4);
         assertThat(restored.getDriverId()).isEqualTo(driverId);
+        assertThat(listener.consumerName()).isEqualTo("order-delivery-v1");
     }
 
     @Test
     void malformedOrMissingEventIdThrowsWithoutMutation() {
+        org.mockito.Mockito.doThrow(new IllegalArgumentException("eventId is required"))
+                .when(sequencedEventProcessor).parseAndValidate(anyString());
+
         assertThatThrownBy(() -> listener.onEvent("{\"eventType\":\"DeliveryCompleted\"}"))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(orderRepository.findById(orderId).orElseThrow().getStatus())
                 .isEqualTo(OrderStatus.READY_FOR_PICKUP);
-        assertThat(processedIds).isEmpty();
     }
 
     @Test
@@ -108,7 +136,20 @@ class DeliveryLifecycleEventListenerTest {
         listener.onEvent(json(failed(UUID.randomUUID(), 1)));
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLATION_PENDING);
-        assertThat(processedIds).hasSize(1);
+        verify(compensationService).start(
+                eq(order.getId()),
+                eq(CancellationCode.DELIVERY_FAILED),
+                eq("Customer unreachable"),
+                eq(OrderEventPayloads.Source.DELIVERY_EVENT));
+        verify(sequencedEventProcessor).process(
+                eq(DeliveryLifecycleEventListener.CONSUMER_NAME), any(), anyString(), any());
+    }
+
+    private IntegrationEventEnvelope<JsonNode> realParse(String raw) {
+        SequencedEventProcessor real = new SequencedEventProcessor(
+                mock(), mock(), mock(), objectMapper,
+                java.time.Clock.fixed(Instant.parse("2026-07-22T10:00:00Z"), java.time.ZoneOffset.UTC));
+        return real.parseAndValidate(raw);
     }
 
     private String json(ObjectNode envelope) {
