@@ -763,6 +763,8 @@ public class Order {
             case RESTAURANT_ACCEPTANCE_TIMEOUT -> source == OrderEventPayloads.Source.SYSTEM_TIMEOUT;
             case DELIVERY_FAILED -> source == OrderEventPayloads.Source.DELIVERY_EVENT
                     || source == OrderEventPayloads.Source.DELIVERY_RECONCILIATION;
+            case CUSTOMER_REQUESTED -> source == OrderEventPayloads.Source.CUSTOMER;
+            case ADMIN_CANCELLED -> source == OrderEventPayloads.Source.ADMIN;
         };
         if (!valid) {
             throw new IllegalArgumentException("Invalid source for cancellation code: " + code);
@@ -772,7 +774,9 @@ public class Order {
     /**
      * Allowed cancel edges from the fulfillment design:
      * PAID/CONFIRMED for restaurant reject or acceptance timeout (timeout only from PAID);
-     * READY_FOR_PICKUP/PICKED_UP/DELIVERING for delivery failure.
+     * READY_FOR_PICKUP/PICKED_UP/DELIVERING for delivery failure;
+     * customer: PAID/CONFIRMED (PENDING handled via {@link #cancelUnpaid});
+     * admin: broader pre-delivery and in-transit.
      */
     private static boolean isCancellationAllowed(OrderStatus current, CancellationCode code) {
         return switch (code) {
@@ -781,7 +785,36 @@ public class Order {
             case DELIVERY_FAILED -> current == OrderStatus.READY_FOR_PICKUP
                     || current == OrderStatus.PICKED_UP
                     || current == OrderStatus.DELIVERING;
+            case CUSTOMER_REQUESTED -> current == OrderStatus.PAID || current == OrderStatus.CONFIRMED;
+            case ADMIN_CANCELLED -> current == OrderStatus.PAID
+                    || current == OrderStatus.CONFIRMED
+                    || current == OrderStatus.PREPARING
+                    || current == OrderStatus.READY_FOR_PICKUP
+                    || current == OrderStatus.PICKED_UP
+                    || current == OrderStatus.DELIVERING;
         };
+    }
+
+    /**
+     * Unpaid order cancel (PENDING): go straight to CANCELLED without refund.
+     */
+    public void cancelUnpaid(String reason, CancellationCode code, OrderEventPayloads.Source source, Instant cancelledAt) {
+        Objects.requireNonNull(cancelledAt, "cancelledAt is required");
+        Objects.requireNonNull(code, "cancellationCode is required");
+        requireCancellationSource(code, source);
+        if (status != OrderStatus.PENDING) {
+            throw new InvalidOrderStateException("Unpaid cancel requires PENDING; was " + status);
+        }
+        String normalizedReason = normalizedReason(reason);
+        if (!forwardTransition(OrderStatus.PENDING, OrderStatus.CANCELLED, normalizedReason, null,
+                cancelledAt, source)) {
+            return;
+        }
+        this.cancellationCode = code;
+        this.cancellationReason = normalizedReason;
+        this.paymentStatus = PaymentStatus.FAILED;
+        this.refundStatus = RefundStatus.NOT_REQUIRED;
+        registerCancellationEvent(cancelledAt);
     }
 
     /** Đăng ký outbox event vào danh sách chờ */

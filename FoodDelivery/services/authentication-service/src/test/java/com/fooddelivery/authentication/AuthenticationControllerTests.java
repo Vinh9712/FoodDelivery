@@ -6,6 +6,7 @@ import com.fooddelivery.authentication.application.service.LoginRateLimiter;
 import com.fooddelivery.authentication.application.service.SecurityAuditLogger;
 import com.fooddelivery.authentication.application.usecase.LoginUseCase;
 import com.fooddelivery.authentication.application.usecase.LogoutUseCase;
+import com.fooddelivery.authentication.application.usecase.PasswordUseCase;
 import com.fooddelivery.authentication.application.usecase.RefreshTokenUseCase;
 import com.fooddelivery.authentication.application.usecase.RegisterCustomerUseCase;
 import com.fooddelivery.authentication.utils.RealIPExtractor;
@@ -28,6 +29,7 @@ class AuthenticationControllerTests {
         LoginUseCase loginUseCase = mock(LoginUseCase.class);
         RefreshTokenUseCase refreshTokenUseCase = mock(RefreshTokenUseCase.class);
         LogoutUseCase logoutUseCase = mock(LogoutUseCase.class);
+        PasswordUseCase passwordUseCase = mock(PasswordUseCase.class);
         RealIPExtractor realIPExtractor = mock(RealIPExtractor.class);
         LoginRateLimiter loginRateLimiter = mock(LoginRateLimiter.class);
         SecurityAuditLogger auditLogger = mock(SecurityAuditLogger.class);
@@ -37,6 +39,7 @@ class AuthenticationControllerTests {
                 loginUseCase,
                 refreshTokenUseCase,
                 logoutUseCase,
+                passwordUseCase,
                 realIPExtractor,
                 loginRateLimiter,
                 auditLogger);

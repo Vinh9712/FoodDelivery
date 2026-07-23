@@ -21,6 +21,9 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     @EntityGraph(attributePaths = {"statusHistory"})
     Optional<Order> findWithHistoryById(UUID id);
 
+    @EntityGraph(attributePaths = {"statusHistory", "items"})
+    Optional<Order> findDetailedById(UUID id);
+
     Optional<Order> findByCustomerIdAndClientRequestId(UUID customerId, String clientRequestId);
 
     List<Order> findTop100ByStatusOrderByCreatedAtAsc(OrderStatus status);
@@ -28,6 +31,20 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     Page<Order> findByRestaurantIdAndStatus(UUID restaurantId, OrderStatus status, Pageable pageable);
 
     Page<Order> findByRestaurantId(UUID restaurantId, Pageable pageable);
+
+    /**
+     * Admin/customer order list. Null {@code customerId} = all customers (admin only at call site).
+     * Null {@code status} = any status.
+     */
+    @Query("""
+            select o from Order o
+            where (:customerId is null or o.customerId = :customerId)
+              and (:status is null or o.status = :status)
+            """)
+    Page<Order> findAllFiltered(
+            @Param("customerId") UUID customerId,
+            @Param("status") OrderStatus status,
+            Pageable pageable);
 
     /**
      * READY_FOR_PICKUP orders due for delivery reconciliation.

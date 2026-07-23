@@ -125,11 +125,98 @@ Nếu không cấu hình RSA key pair, auth service tạo key tạm thời để
 
 Khi chạy với PostgreSQL volume cũ còn database `user_db`, đặt `CUSTOMER_DB_NAME=user_db` trong `.env`. Migration mới sẽ rename `customers.user_id` thành `auth_user_id` mà không sửa checksum migration V1 lịch sử.
 
+## Order fulfillment core flow
+
+Happy path state sequence (order-service is source of truth):
+
+```text
+PENDING → PAID → CONFIRMED → PREPARING → READY_FOR_PICKUP
+        → PICKED_UP → DELIVERING → DELIVERED
+```
+
+- Payment success stops at **PAID** (not CONFIRMED). Delivery is **not** scheduled at payment time.
+- Restaurant owner/admin advances kitchen states after payment:
+  - `CONFIRMED` = restaurant accepted
+  - `PREPARING` = kitchen started
+  - `READY_FOR_PICKUP` = food ready; **then** order-service schedules delivery (after-commit, idempotent key `delivery-schedule:{orderId}`)
+- Delivery lifecycle (driver assign → pick up → in transit → completed) is published by **delivery-service only** and consumed by order-service to advance `PICKED_UP` / `DELIVERING` / `DELIVERED`.
+
+### Restaurant-order API (gateway → order-service)
+
+Role: `RESTAURANT_OWNER` or `ADMIN`. Path prefix routed only to order-service; `/internal/**` is never exposed via the gateway.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v1/restaurant-orders?restaurantId=&status=&page=&size=` | List restaurant orders |
+| `POST` | `/api/v1/restaurant-orders/{orderId}/accept` | PAID → CONFIRMED |
+| `POST` | `/api/v1/restaurant-orders/{orderId}/start-preparing` | CONFIRMED → PREPARING |
+| `POST` | `/api/v1/restaurant-orders/{orderId}/ready` | PREPARING → READY_FOR_PICKUP (+ schedule delivery) |
+| `POST` | `/api/v1/restaurant-orders/{orderId}/reject` | body `{"reason":"..."}` → cancellation path |
+
+### Customer / Admin order API (gateway → order-service)
+
+| Method | Path | Role | Purpose |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/orders` | `CUSTOMER` | Create order (Saga) |
+| `GET` | `/api/v1/orders?page=&size=&status=&userId=` | `CUSTOMER` / `ADMIN` | List orders (customer = own; admin = system-wide, optional `userId`) |
+| `GET` | `/api/v1/orders/{id}` | owner `CUSTOMER` or `ADMIN` | Order detail (items, address, history, payment/refund/cancel fields) |
+| `POST` | `/api/v1/orders/{id}/cancel` | owner `CUSTOMER` or `ADMIN` | body `{"reason":"..."}` — PENDING→CANCELLED; paid→compensation/refund |
+
+### Kafka family topics (v1)
+
+| Topic | Typical producers | Consumers |
+| --- | --- | --- |
+| `order.events.v1` | order-service outbox | downstream (e.g. notification) |
+| `delivery.events.v1` | delivery-service outbox | order-service lifecycle listener |
+| `payment.events.v1` | payment-service | order reconciliation (when enabled) |
+
+Payloads are **raw JSON** `IntegrationEventEnvelope` (no Java type headers). Kafka key is `orderId` for order/delivery family events. Consumers use `StringDeserializer` and parse the envelope explicitly.
+
+**Coordinated cutover:** deploy order-service and delivery-service together when switching to these v1 topics so producers and consumers agree on topic names and envelope shape. Legacy per-event topic names are not used by the core fulfillment path.
+
+Notifications are **in-app / internal** side effects only; this platform path does not claim external email or SMS delivery.
+
+### Auth password recovery
+
+| Method | Path | Role | Purpose |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/auth/forgot-password` | public | body `{"email"}` — issues reset token (logged in dev; generic response) |
+| `POST` | `/api/v1/auth/reset-password` | public | body `{"token","newPassword"}` — sets password, revokes all sessions |
+| `POST` | `/api/v1/auth/change-password` | authenticated | body `{"oldPassword","newPassword"}` — revokes all sessions |
+
+### Driver API (gateway → delivery-service)
+
+| Method | Path | Role | Purpose |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/auth/register-driver` | public | Create DRIVER account |
+| `GET` | `/api/v1/drivers/me` | `DRIVER` | Get profile |
+| `PUT` | `/api/v1/drivers/me` | `DRIVER` | Create/update profile (vehicle, phone…) |
+| `GET` | `/api/v1/drivers/me/deliveries?status=&page=&size=` | `DRIVER` | Job history / filter by status |
+| `GET` | `/api/v1/drivers/me/deliveries/current` | `DRIVER` | Active job or 204 |
+| `POST` | `/api/v1/drivers/me/online` / `offline` | `DRIVER` | Availability |
+| `PUT` | `/api/v1/drivers/me/location` | `DRIVER` | GPS update |
+
+### Notification API (gateway → notification-service)
+
+| Method | Path | Role | Purpose |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/notifications/me?page=&size=&unreadOnly=` | authenticated | Customer inbox |
+| `POST` | `/api/v1/notifications/me/{id}/read` | owner | Mark one read |
+| `POST` | `/api/v1/notifications/me/read-all` | authenticated | Mark all read |
+| `GET` | `/api/v1/notifications` | `ADMIN` | Last 200 jobs (ops) |
+
+Consumes family topics: `order.events.v1`, `delivery.events.v1`, `payment.events.v1`.
+
 ## Event model
 
 Theo structure hiện tại, service dùng event contract chung từ `shared/common-events` và publish qua Kafka.
 
-Event chính:
+Family topics (fulfillment core):
+- `order.events.v1`
+- `delivery.events.v1`
+- `payment.events.v1`
+
+Legacy / adjacent examples:
 - `customer.registered`
 - `customer.profile.updated`
 
@@ -174,6 +261,29 @@ docker compose up --build
 Compose dựng PostgreSQL + Kafka + Kafka-UI + Keycloak legacy (optional) + Eureka + Config Server + API
 Gateway + 7 service, đúng thứ tự khởi động qua healthcheck. Credential DB và security lấy từ `.env`
 (không hardcode). Chi tiết: [docs/PLATFORM.md](docs/PLATFORM.md#run-the-whole-stack-with-docker-compose).
+
+## Order reliability (fulfillment v1)
+
+Canonical Kafka topics only (partition key = `orderId`):
+
+| Topic | Role |
+|---|---|
+| `order.events.v1` | Order lifecycle + refund status + cancelled |
+| `delivery.events.v1` | Driver assigned + delivery lifecycle |
+| `payment.events.v1` | Payment succeeded/failed/refunded |
+
+Reliability building blocks:
+
+- **Transactional outbox** with per-aggregate monotonic sequence and head-of-line blocking relay (`acks=all`, idempotent producer).
+- **Sequenced inbox** (dedupe / stale / gap-defer / drain) in order-service (`order-delivery-v1`, `order-payment-v1`) and delivery-service (`delivery-order-v1`).
+- **Delivery reconciliation** for lost schedule responses (lookup before POST; never refund on timeout alone).
+- **Idempotent refunds** + order stays `CANCELLATION_PENDING` until payment confirms refund.
+- **Restaurant acceptance timeout** (default 10m window, 15s scan) races accept via optimistic locking exactly once.
+- **OrderCancelled → pre-pickup delivery cancel** and driver release (post-pickup alerts only).
+
+Ops cutover runbook: [docs/operations/fulfillment-v1-cutover.md](docs/operations/fulfillment-v1-cutover.md).
+
+Key Micrometer series: `outbox_pending`, `outbox_oldest_unpublished_seconds`, `outbox_publish_retry_total`, `outbox_dead_letter_total`, `integration_event_deferred`, `integration_event_gap_total`, `order_delivery_reconciliation_total`, `order_refund_reconciliation_total`, `restaurant_acceptance_timeout_total`, `delivery_cancellation_after_pickup_total`.
 
 ## Ghi chú
 

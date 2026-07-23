@@ -80,6 +80,33 @@ public class Driver {
         this.totalReviews = 0;
     }
 
+    /** Bootstrap a driver profile linked to an auth user (self-onboarding). */
+    public static Driver createForUser(
+            UUID userId, String fullName, String phone, VehicleType vehicleType, String licensePlate) {
+        Driver driver = new Driver(fullName, phone, vehicleType, licensePlate, null);
+        driver.userId = java.util.Objects.requireNonNull(userId, "userId is required");
+        return driver;
+    }
+
+    public void updateProfile(String fullName, String phone, VehicleType vehicleType, String licensePlate) {
+        if (fullName == null || fullName.isBlank()) {
+            throw new IllegalArgumentException("fullName is required");
+        }
+        if (phone == null || phone.isBlank()) {
+            throw new IllegalArgumentException("phone is required");
+        }
+        if (vehicleType == null) {
+            throw new IllegalArgumentException("vehicleType is required");
+        }
+        if (licensePlate == null || licensePlate.isBlank()) {
+            throw new IllegalArgumentException("licensePlate is required");
+        }
+        this.fullName = fullName.trim();
+        this.phone = phone.trim();
+        this.vehicleType = vehicleType;
+        this.licensePlate = licensePlate.trim();
+    }
+
     public void reserveForDelivery() {
         if (!available || !isOnline || status != DriverStatus.ACTIVE) {
             throw new DriverNotEligibleException(this.id, this.status);

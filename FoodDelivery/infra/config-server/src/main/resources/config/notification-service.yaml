@@ -10,6 +10,10 @@ app:
       retry-base-delay: ${NOTIFICATION_RETRY_BASE_DELAY:5s}
       retry-max-delay: ${NOTIFICATION_RETRY_MAX_DELAY:10m}
       max-attempts: ${NOTIFICATION_MAX_ATTEMPTS:5}
+    kafka:
+      order-events-topic: ${ORDER_EVENTS_TOPIC:order.events.v1}
+      delivery-events-topic: ${DELIVERY_EVENTS_TOPIC:delivery.events.v1}
+      payment-events-topic: ${PAYMENT_EVENTS_TOPIC:payment.events.v1}
 
 spring:
   kafka:
@@ -17,11 +21,8 @@ spring:
       group-id: notification-service
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      properties:
-        spring.json.trusted.packages: "com.fooddelivery.notification.*,java.util"
-        spring.json.use.type.headers: false
-        spring.json.value.default.type: java.util.Map
+      # Family topics publish raw IntegrationEventEnvelope JSON (no Java type headers).
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/notification_db
     username: ${DB_USER}

@@ -6,6 +6,7 @@ import com.fooddelivery.order.infrastructure.repository.DeferredIntegrationEvent
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.PageRequest;
@@ -53,6 +54,7 @@ public class DeferredEventDrainScheduler {
     private final String dltTopic;
     private final Map<String, SequencedConsumer> consumersByName;
 
+    @Autowired
     public DeferredEventDrainScheduler(
             DeferredIntegrationEventRepository deferredRepository,
             ConsumedAggregateSequenceRepository sequenceRepository,
