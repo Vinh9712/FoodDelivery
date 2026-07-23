@@ -23,6 +23,12 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 
     Optional<Order> findByCustomerIdAndClientRequestId(UUID customerId, String clientRequestId);
 
+    Optional<Order> findByIdAndCustomerId(UUID id, UUID customerId);
+
+    Page<Order> findByCustomerIdAndStatus(UUID customerId, OrderStatus status, Pageable pageable);
+
+    Page<Order> findByCustomerId(UUID customerId, Pageable pageable);
+
     List<Order> findTop100ByStatusOrderByCreatedAtAsc(OrderStatus status);
 
     Page<Order> findByRestaurantIdAndStatus(UUID restaurantId, OrderStatus status, Pageable pageable);

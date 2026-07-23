@@ -7,6 +7,7 @@ import com.fooddelivery.order.domain.exception.OrderNotFoundException;
 import feign.FeignException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -35,6 +36,16 @@ public class GlobalExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
         problem.setTitle("Invalid Order State");
         problem.setType(URI.create("https://api.fooddelivery.com/errors/invalid-order-state"));
+        return problem;
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ProblemDetail handleOptimisticLockingFailure(OptimisticLockingFailureException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                "Order state changed while the request was being processed. Reload and try again.");
+        problem.setTitle("Order State Conflict");
+        problem.setType(URI.create("https://api.fooddelivery.com/errors/order-state-conflict"));
         return problem;
     }
 

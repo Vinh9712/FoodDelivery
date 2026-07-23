@@ -94,10 +94,12 @@ public class RestaurantOrderService {
     }
 
     private void persist(Order order) {
+        // Flush the versioned aggregate before inserting sequence-based outbox
+        // rows so a concurrent cancellation is surfaced as an optimistic conflict.
+        orderRepository.saveAndFlush(order);
         if (!order.getPendingOutboxEvents().isEmpty()) {
             outboxEventRepository.saveAll(order.getPendingOutboxEvents());
             order.clearPendingOutboxEvents();
         }
-        orderRepository.save(order);
     }
 }

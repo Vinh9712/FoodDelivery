@@ -19,6 +19,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -30,10 +34,14 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -47,6 +55,8 @@ class OrderCompensationServiceTest {
     private OutboxEventRepository outboxEventRepository;
     @Mock
     private PaymentServiceClient paymentClient;
+    @Mock
+    private PlatformTransactionManager transactionManager;
 
     private OrderCompensationService compensation;
     private Order order;
@@ -60,14 +70,17 @@ class OrderCompensationServiceTest {
                 paymentClient,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 emptyMeterRegistry(),
+                transactionManager,
                 Duration.ofSeconds(30),
                 Duration.ofMinutes(30),
                 8);
 
+        lenient().when(transactionManager.getTransaction(any(TransactionDefinition.class)))
+                .thenAnswer(invocation -> mock(TransactionStatus.class));
         order = readyOrder();
         orderId = order.getId();
-        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
-        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(orderRepository.saveAndFlush(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(outboxEventRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -120,6 +133,44 @@ class OrderCompensationServiceTest {
     }
 
     @Test
+    void commitsCancellationPendingBeforeCallingRemoteRefund() {
+        when(paymentClient.refundPayment(eq("refund:" + orderId), any(RefundRequest.class)))
+                .thenReturn(new RefundResponse(
+                        orderId, "REFUNDED", "ok",
+                        UUID.randomUUID(), UUID.randomUUID(),
+                        order.getTotalAmount(), NOW));
+
+        compensation.start(orderId, CancellationCode.DELIVERY_FAILED, "no courier",
+                OrderEventPayloads.Source.DELIVERY_EVENT);
+
+        var calls = inOrder(orderRepository, outboxEventRepository, transactionManager, paymentClient);
+        calls.verify(orderRepository).saveAndFlush(order);
+        calls.verify(outboxEventRepository).saveAll(any());
+        calls.verify(transactionManager).commit(any(TransactionStatus.class));
+        calls.verify(paymentClient).refundPayment(
+                eq("refund:" + orderId), any(RefundRequest.class));
+    }
+
+    @Test
+    void commitRacePreventsRemoteRefundSideEffect() {
+        order = paidOrder();
+        orderId = order.getId();
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        var race = new OptimisticLockingFailureException("restaurant accepted first");
+        when(orderRepository.saveAndFlush(order)).thenThrow(race);
+
+        assertThatThrownBy(() -> compensation.start(
+                orderId,
+                CancellationCode.CUSTOMER_REQUESTED,
+                "changed plans",
+                OrderEventPayloads.Source.CUSTOMER))
+                .isSameAs(race);
+
+        verify(paymentClient, never()).refundPayment(any(), any());
+        verify(outboxEventRepository, never()).saveAll(any());
+    }
+
+    @Test
     void startIsIdempotentWhenAlreadyPending() {
         order.beginCompensation("no courier", CancellationCode.DELIVERY_FAILED,
                 OrderEventPayloads.Source.DELIVERY_EVENT, NOW);
@@ -155,6 +206,15 @@ class OrderCompensationServiceTest {
     }
 
     private Order readyOrder() {
+        Order o = paidOrder();
+        o.acceptByRestaurant(UUID.randomUUID());
+        o.startPreparing(UUID.randomUUID());
+        o.markReadyForPickup(UUID.randomUUID());
+        o.clearPendingOutboxEvents();
+        return o;
+    }
+
+    private Order paidOrder() {
         UUID customerId = UUID.randomUUID();
         UUID restaurantId = UUID.randomUUID();
         PickupAddressSnapshot pickup = new PickupAddressSnapshot(
@@ -163,9 +223,6 @@ class OrderCompensationServiceTest {
                 BigDecimal.valueOf(15000), BigDecimal.ZERO, "req-" + UUID.randomUUID(), pickup);
         o.addItem(UUID.randomUUID(), "Pho", "large", BigDecimal.valueOf(50000), 1);
         o.markPaid(Instant.parse("2026-07-22T10:00:00Z"), Duration.ofMinutes(10));
-        o.acceptByRestaurant(UUID.randomUUID());
-        o.startPreparing(UUID.randomUUID());
-        o.markReadyForPickup(UUID.randomUUID());
         o.clearPendingOutboxEvents();
         return o;
     }

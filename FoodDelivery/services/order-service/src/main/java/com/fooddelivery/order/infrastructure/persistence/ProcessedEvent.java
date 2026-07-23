@@ -36,9 +36,6 @@ public class ProcessedEvent {
         this.processedAt = Instant.now();
     }
 
-    /**
-     * Composite primary key.
-     */
     @Getter
     @NoArgsConstructor
     public static class ProcessedEventId implements Serializable {

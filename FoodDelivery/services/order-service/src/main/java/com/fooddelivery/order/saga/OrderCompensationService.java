@@ -21,7 +21,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -48,6 +51,7 @@ public class OrderCompensationService {
     private final Duration maxBackoff;
     private final int maxAttempts;
     private final MeterRegistry meterRegistry;
+    private final TransactionTemplate requiresNewTransaction;
 
     public OrderCompensationService(
             OrderRepository orderRepository,
@@ -55,6 +59,7 @@ public class OrderCompensationService {
             PaymentServiceClient paymentClient,
             Clock clock,
             ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager,
             @Value("${order.refund-reconciliation.initial-backoff:30s}") Duration initialBackoff,
             @Value("${order.refund-reconciliation.max-backoff:30m}") Duration maxBackoff,
             @Value("${order.refund-reconciliation.max-attempts:8}") int maxAttempts) {
@@ -66,29 +71,40 @@ public class OrderCompensationService {
         this.maxBackoff = maxBackoff != null ? maxBackoff : Duration.ofMinutes(30);
         this.maxAttempts = maxAttempts > 0 ? maxAttempts : 8;
         this.meterRegistry = meterRegistry.getIfAvailable(() -> Metrics.globalRegistry);
+        this.requiresNewTransaction = new TransactionTemplate(transactionManager);
+        this.requiresNewTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
-    @Transactional
     public void start(UUID orderId, CancellationCode code, String reason, OrderEventPayloads.Source source) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new OrderNotFoundException(orderId));
-        if (order.getStatus() == OrderStatus.CANCELLED) {
-            return;
-        }
-        if (order.getStatus() == OrderStatus.CANCELLATION_PENDING) {
-            if (order.getRefundStatus() == RefundStatus.PENDING) {
-                attemptRefund(order);
+        Boolean shouldAttemptRefund = requiresNewTransaction.execute(status -> {
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new OrderNotFoundException(orderId));
+            if (order.getStatus() == OrderStatus.CANCELLED) {
+                return false;
             }
+            if (order.getStatus() == OrderStatus.CANCELLATION_PENDING) {
+                return order.getRefundStatus() == RefundStatus.PENDING;
+            }
+
+            Instant now = clock.instant();
+            order.beginCompensation(reason, code, source, now);
+            order.scheduleFirstRefundAttempt(now);
+            persist(order);
+            return true;
+        });
+
+        if (!Boolean.TRUE.equals(shouldAttemptRefund)) {
             return;
         }
 
-        Instant now = clock.instant();
-        order.beginCompensation(reason, code, source, now);
-        order.scheduleFirstRefundAttempt(now);
-        persist(order);
-
-        order = orderRepository.findById(orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
-        attemptRefund(order);
+        // The pending state and its outbox events are committed before any remote refund
+        // side effect. A concurrent restaurant acceptance therefore either wins before
+        // this point (and no refund runs) or loses to the durable cancellation transition.
+        requiresNewTransaction.executeWithoutResult(status -> {
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new OrderNotFoundException(orderId));
+            attemptRefund(order);
+        });
     }
 
     @Transactional
@@ -222,10 +238,13 @@ public class OrderCompensationService {
     }
 
     private void persist(Order order) {
+        // Claim the aggregate version before staging sequence-based outbox rows.
+        // In an accept-vs-cancel race this guarantees the loser reports an
+        // optimistic-lock conflict instead of a duplicate outbox sequence.
+        orderRepository.saveAndFlush(order);
         if (!order.getPendingOutboxEvents().isEmpty()) {
             outboxEventRepository.saveAll(order.getPendingOutboxEvents());
             order.clearPendingOutboxEvents();
         }
-        orderRepository.save(order);
     }
 }

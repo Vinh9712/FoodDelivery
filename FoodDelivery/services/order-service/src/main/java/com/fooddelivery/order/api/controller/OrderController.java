@@ -17,15 +17,15 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import com.fooddelivery.order.domain.model.valueobject.OrderStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+
 import java.util.UUID;
 
-/**
- * REST controller for Order resources.
- * <p>
- * Endpoint {@code POST /api/v1/orders} kích hoạt luồng Saga điều phối
- * thanh toán → giao vận → thông báo.
- * </p>
- */
+
 @RestController
 @RequestMapping("/api/v1/orders")
 @RequiredArgsConstructor
@@ -37,12 +37,12 @@ public class OrderController {
     private final OrderMapper orderMapper;
     private final OrderSagaOrchestrator sagaOrchestrator;
 
-    /**
-     * Tạo đơn hàng mới và thực thi Saga đặt hàng.
-     *
-     * @param request chỉ chứa restaurant, địa chỉ và menu item ID/số lượng; danh tính và giá do server xác định
-     * @return OrderResponse với trạng thái cuối cùng sau khi saga hoàn tất
-     */
+
+
+    //Tạo đơn hàng mới và thực thi Saga đặt hàng
+    //@param request chỉ chứa restaurant, địa chỉ và menu item ID/số lượng; danh tính và giá do server xác định
+    //@return OrderResponse với trạng thái cuối cùng sau khi saga hoàn tất
+
     @PostMapping
     @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<OrderResponse> createOrder(
@@ -50,7 +50,7 @@ public class OrderController {
             @Valid @RequestBody CreateOrderRequest request,
             Authentication authentication) {
         UUID customerId = UUID.fromString(authentication.getName());
-        log.info("📥 Nhận yêu cầu tạo đơn hàng: customerId={}, restaurantId={}",
+        log.info(" Nhận yêu cầu tạo đơn hàng: customerId={}, restaurantId={}",
                 customerId, request.restaurantId());
 
         var requestedItems = request.items().stream()
@@ -66,7 +66,7 @@ public class OrderController {
                 requestedItems
         );
 
-        log.info("✅ Saga hoàn tất: orderId={}, status={}", order.getId(), order.getStatus());
+        log.info(" Saga hoàn tất: orderId={}, status={}", order.getId(), order.getStatus());
         return ResponseEntity.status(HttpStatus.CREATED).body(orderMapper.toResponse(order));
     }
 

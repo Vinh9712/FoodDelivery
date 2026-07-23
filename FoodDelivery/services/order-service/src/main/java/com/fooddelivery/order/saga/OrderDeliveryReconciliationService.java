@@ -116,6 +116,21 @@ public class OrderDeliveryReconciliationService {
     }
 
     private void applyRemoteState(Order order, DeliveryStatusResponse remote, Instant now) {
+        String status = normalize(remote.status());
+        if (remote.isTerminalFailure() || "FAILED".equals(status) || "CANCELLED".equals(status)) {
+            String reason = remote.failureReason() != null
+                    ? remote.failureReason()
+                    : (remote.message() != null ? remote.message() : "Delivery " + status);
+            // Compensation commits the same aggregate in REQUIRES_NEW phases. Do not
+            // leave this outer transaction holding a dirty, stale Order instance.
+            compensationService.start(
+                    order.getId(),
+                    CancellationCode.DELIVERY_FAILED,
+                    reason,
+                    OrderEventPayloads.Source.DELIVERY_RECONCILIATION);
+            return;
+        }
+
         order.attachDelivery(remote.deliveryId());
         if (remote.driverId() != null) {
             try {
@@ -123,20 +138,6 @@ public class OrderDeliveryReconciliationService {
             } catch (RuntimeException ignored) {
                 // continue catch-up
             }
-        }
-
-        String status = normalize(remote.status());
-        if (remote.isTerminalFailure() || "FAILED".equals(status) || "CANCELLED".equals(status)) {
-            persist(order);
-            String reason = remote.failureReason() != null
-                    ? remote.failureReason()
-                    : (remote.message() != null ? remote.message() : "Delivery " + status);
-            compensationService.start(
-                    order.getId(),
-                    CancellationCode.DELIVERY_FAILED,
-                    reason,
-                    OrderEventPayloads.Source.DELIVERY_RECONCILIATION);
-            return;
         }
 
         catchUpLifecycle(order, remote, status, now);

@@ -3,6 +3,7 @@ package com.fooddelivery.order.domain.model;
 import com.fooddelivery.commonevents.order.OrderEventPayloads;
 import com.fooddelivery.order.domain.exception.InvalidOrderStateException;
 import com.fooddelivery.order.domain.model.valueobject.AssignedDriverInfo;
+import com.fooddelivery.order.domain.model.valueobject.CancellationCode;
 import com.fooddelivery.order.domain.model.valueobject.OrderStatus;
 import com.fooddelivery.order.domain.model.valueobject.PaymentStatus;
 import com.fooddelivery.order.domain.model.valueobject.PickupAddressSnapshot;
@@ -107,6 +108,35 @@ class OrderTest {
                 com.fooddelivery.order.domain.model.valueobject.CancellationCode.DELIVERY_FAILED,
                 OrderEventPayloads.Source.DELIVERY_RECONCILIATION);
         assertThat(pickedUp.getStatus()).isEqualTo(OrderStatus.CANCELLATION_PENDING);
+    }
+
+    @Test
+    void customerCancellationIsAuditedAndOnlyAllowedBeforeRestaurantAccepts() {
+        Order paid = paidOrder();
+
+        paid.requestCancellation(
+                "Customer changed delivery plans",
+                CancellationCode.CUSTOMER_REQUESTED,
+                OrderEventPayloads.Source.CUSTOMER);
+
+        assertThat(paid.getStatus()).isEqualTo(OrderStatus.CANCELLATION_PENDING);
+        assertThat(paid.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(paid.getRefundStatus()).isEqualTo(RefundStatus.PENDING);
+        assertThat(paid.getCancellationCode()).isEqualTo(CancellationCode.CUSTOMER_REQUESTED);
+
+        Order confirmed = paidOrder();
+        confirmed.acceptByRestaurant(UUID.randomUUID());
+        assertThatThrownBy(() -> confirmed.requestCancellation(
+                "Too late",
+                CancellationCode.CUSTOMER_REQUESTED,
+                OrderEventPayloads.Source.CUSTOMER))
+                .isInstanceOf(InvalidOrderStateException.class);
+
+        Order wrongSource = paidOrder();
+        assertThatIllegalArgumentException().isThrownBy(() -> wrongSource.requestCancellation(
+                "Wrong actor",
+                CancellationCode.CUSTOMER_REQUESTED,
+                OrderEventPayloads.Source.RESTAURANT));
     }
 
     @Test

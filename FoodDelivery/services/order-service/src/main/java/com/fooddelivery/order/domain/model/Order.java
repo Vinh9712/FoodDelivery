@@ -759,6 +759,7 @@ public class Order {
 
     private void requireCancellationSource(CancellationCode code, OrderEventPayloads.Source source) {
         boolean valid = switch (code) {
+            case CUSTOMER_REQUESTED -> source == OrderEventPayloads.Source.CUSTOMER;
             case RESTAURANT_REJECTED -> source == OrderEventPayloads.Source.RESTAURANT;
             case RESTAURANT_ACCEPTANCE_TIMEOUT -> source == OrderEventPayloads.Source.SYSTEM_TIMEOUT;
             case DELIVERY_FAILED -> source == OrderEventPayloads.Source.DELIVERY_EVENT
@@ -776,6 +777,7 @@ public class Order {
      */
     private static boolean isCancellationAllowed(OrderStatus current, CancellationCode code) {
         return switch (code) {
+            case CUSTOMER_REQUESTED -> current == OrderStatus.PAID;
             case RESTAURANT_REJECTED -> current == OrderStatus.PAID || current == OrderStatus.CONFIRMED;
             case RESTAURANT_ACCEPTANCE_TIMEOUT -> current == OrderStatus.PAID;
             case DELIVERY_FAILED -> current == OrderStatus.READY_FOR_PICKUP

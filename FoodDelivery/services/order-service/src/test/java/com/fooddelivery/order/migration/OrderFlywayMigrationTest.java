@@ -68,7 +68,7 @@ class OrderFlywayMigrationTest {
 
         Flyway latest = flyway();
         latest.migrate();
-        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("12");
+        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("13");
         assertThat(indexExists("idx_order_outbox_due_sequence")).isTrue();
         assertThat(constraintExists("uq_order_outbox_aggregate_sequence")).isTrue();
         assertThat(tableExists("consumed_aggregate_sequences")).isTrue();
@@ -85,9 +85,10 @@ class OrderFlywayMigrationTest {
         assertThat(columnExists("orders", "next_delivery_schedule_attempt_at")).isTrue();
         assertThat(columnExists("orders", "last_delivery_schedule_error")).isTrue();
         assertThat(indexExists("idx_orders_delivery_reconcile")).isTrue();
+        assertThat(indexExists("idx_orders_customer_created_id")).isTrue();
 
         assertThatCode(this::validateOutboxEntitySchema)
-                .as("Hibernate ddl-auto=validate must succeed for OutboxEvent after V12")
+                .as("Hibernate ddl-auto=validate must succeed for OutboxEvent after V13")
                 .doesNotThrowAnyException();
     }
 
