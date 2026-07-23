@@ -4,7 +4,16 @@ import java.time.Instant;
 import java.util.UUID;
 
 public final class OrderEventPayloads {
-    public enum Source { PAYMENT_RECONCILIATION, CUSTOMER, RESTAURANT, DELIVERY_EVENT, DELIVERY_RECONCILIATION, COMPENSATION, SYSTEM_TIMEOUT }
+    public enum Source {
+        PAYMENT_RECONCILIATION,
+        RESTAURANT,
+        DELIVERY_EVENT,
+        DELIVERY_RECONCILIATION,
+        COMPENSATION,
+        SYSTEM_TIMEOUT,
+        CUSTOMER,
+        ADMIN
+    }
 
     public record OrderCreated(UUID orderId, UUID customerId, UUID restaurantId,
                                String totalAmount, String currency, Instant createdAt) {

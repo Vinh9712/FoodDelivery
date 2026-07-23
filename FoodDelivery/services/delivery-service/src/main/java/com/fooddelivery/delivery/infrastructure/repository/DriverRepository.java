@@ -3,6 +3,7 @@ package com.fooddelivery.delivery.infrastructure.repository;
 import com.fooddelivery.delivery.domain.model.Driver;
 import com.fooddelivery.delivery.domain.model.valueobject.DriverStatus;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -18,6 +19,8 @@ import java.util.UUID;
 public interface DriverRepository extends JpaRepository<Driver, UUID> {
 
     Optional<Driver> findByUserId(UUID userId);
+
+    Page<Driver> findByIsOnline(boolean isOnline, Pageable pageable);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""

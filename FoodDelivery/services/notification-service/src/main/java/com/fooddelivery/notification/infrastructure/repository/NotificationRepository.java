@@ -7,6 +7,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -23,11 +24,33 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
 
     List<Notification> findByUserIdOrderByCreatedAtDesc(UUID userId);
 
+    Page<Notification> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
+
     long countByUserIdAndIsReadFalse(UUID userId);
+
+    @Query("""
+            select n from Notification n
+            where n.userId = :userId and n.isRead = :isRead
+            order by n.createdAt desc
+            """)
+    Page<Notification> findByUserIdAndReadFlag(
+            @Param("userId") UUID userId,
+            @Param("isRead") boolean isRead,
+            Pageable pageable);
+
+    Optional<Notification> findByIdAndUserId(UUID id, UUID userId);
 
     Optional<Notification> findByRequestKey(String requestKey);
 
     List<Notification> findTop200ByOrderByCreatedAtDesc();
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update Notification n
+            set n.isRead = true, n.readAt = :now, n.updatedAt = :now
+            where n.userId = :userId and n.isRead = false
+            """)
+    int markAllReadByUserId(@Param("userId") UUID userId, @Param("now") Instant now);
 
     @Query("""
             select notification.id from Notification notification

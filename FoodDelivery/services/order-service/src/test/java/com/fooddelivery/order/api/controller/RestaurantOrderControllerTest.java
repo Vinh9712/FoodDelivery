@@ -51,6 +51,8 @@ class RestaurantOrderControllerTest {
     private RestaurantOrderAuthorizationService authorizationService;
     @Mock
     private OrderMapper orderMapper;
+    @Mock
+    private com.fooddelivery.order.infrastructure.repository.OrderRepository orderRepository;
 
     private RestaurantOrderController controller;
     private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
@@ -62,7 +64,7 @@ class RestaurantOrderControllerTest {
     @BeforeEach
     void setUp() {
         controller = new RestaurantOrderController(
-                restaurantOrderService, authorizationService, orderMapper);
+                restaurantOrderService, authorizationService, orderMapper, orderRepository);
     }
 
     @Test
@@ -209,9 +211,18 @@ class RestaurantOrderControllerTest {
                 restaurantId,
                 status,
                 BigDecimal.valueOf(100_000),
+                BigDecimal.valueOf(100_000),
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                null,
+                List.of(),
+                null,
                 null,
                 PaymentStatus.PAID,
                 RefundStatus.NOT_REQUIRED,
+                null,
+                null,
+                List.of(),
                 Instant.parse("2026-07-22T00:00:00Z"),
                 Instant.parse("2026-07-22T00:10:00Z"),
                 Instant.parse("2026-07-22T00:00:00Z"),

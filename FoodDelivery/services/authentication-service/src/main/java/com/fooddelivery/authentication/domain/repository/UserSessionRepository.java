@@ -14,4 +14,7 @@ public interface UserSessionRepository {
     List<UserSession> findAllByUserId(UUID userId);
 
     void markNotCurrentByUserId(UUID userId);
+
+    /** Soft-delete every session for the user (e.g. after password change). */
+    void revokeAllByUserId(UUID userId);
 }

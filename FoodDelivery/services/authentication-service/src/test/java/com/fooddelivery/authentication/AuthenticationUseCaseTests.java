@@ -97,6 +97,52 @@ class AuthenticationUseCaseTests {
     }
 
     @Test
+    void register_ShouldHonorDriverRole() {
+        RegisterCustomerUseCaseImpl useCase = new RegisterCustomerUseCaseImpl(
+                userRepository,
+                outboxEventRepository,
+                passwordEncoder,
+                objectMapper());
+
+        when(userRepository.existsByEmail("driver@gmail.com")).thenReturn(false);
+        when(userRepository.existsByPhone("0912345678")).thenReturn(false);
+        when(passwordEncoder.encode("Secret1!")).thenReturn("hash");
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            setPrivateField(user, "id", UuidCreator.getTimeOrderedEpoch());
+            return user;
+        });
+
+        useCase.execute(new RegisterCustomerCommand(
+                "driver@gmail.com",
+                "0912345678",
+                "Secret1!",
+                "Driver One",
+                UserRole.DRIVER));
+
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(userCaptor.capture());
+        assertEquals(UserRole.DRIVER, userCaptor.getValue().getRole());
+    }
+
+    @Test
+    void register_ShouldRejectAdminSelfRegistration() {
+        RegisterCustomerUseCaseImpl useCase = new RegisterCustomerUseCaseImpl(
+                userRepository,
+                outboxEventRepository,
+                passwordEncoder,
+                objectMapper());
+
+        assertThrows(BusinessRuleException.class, () -> useCase.execute(new RegisterCustomerCommand(
+                "admin@gmail.com",
+                "0912345678",
+                "Secret1!",
+                "Admin",
+                UserRole.ADMIN)));
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
     void register_ShouldRejectDuplicateEmail() {
         RegisterCustomerUseCaseImpl useCase = new RegisterCustomerUseCaseImpl(
                 userRepository,

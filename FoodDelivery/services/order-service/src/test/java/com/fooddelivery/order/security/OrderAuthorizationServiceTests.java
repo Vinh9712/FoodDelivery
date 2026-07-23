@@ -3,6 +3,7 @@ package com.fooddelivery.order.security;
 import com.fooddelivery.order.domain.model.Order;
 import com.fooddelivery.order.infrastructure.repository.OrderRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
@@ -12,6 +13,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -36,6 +38,39 @@ class OrderAuthorizationServiceTests {
     void adminCanReadAnyOrderWithoutOwnershipLookup() {
         assertThat(authorization.canRead(UUID.randomUUID(), authentication(UUID.randomUUID(), "ADMIN"))).isTrue();
         verifyNoInteractions(orderRepository);
+    }
+
+    @Test
+    void adminListFilterIsOptionalUserId() {
+        UUID userId = UUID.randomUUID();
+        assertThat(authorization.resolveListCustomerFilter(null, authentication(UUID.randomUUID(), "ADMIN")))
+                .isNull();
+        assertThat(authorization.resolveListCustomerFilter(userId, authentication(UUID.randomUUID(), "ADMIN")))
+                .isEqualTo(userId);
+    }
+
+    @Test
+    void customerListAlwaysScopesToSelf() {
+        UUID customerId = UUID.randomUUID();
+        assertThat(authorization.resolveListCustomerFilter(null, authentication(customerId, "CUSTOMER")))
+                .isEqualTo(customerId);
+        assertThat(authorization.resolveListCustomerFilter(customerId, authentication(customerId, "CUSTOMER")))
+                .isEqualTo(customerId);
+    }
+
+    @Test
+    void customerCannotListAnotherUsersOrders() {
+        UUID customerId = UUID.randomUUID();
+        assertThatThrownBy(() -> authorization.resolveListCustomerFilter(
+                UUID.randomUUID(), authentication(customerId, "CUSTOMER")))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void restaurantOwnerCannotListOrders() {
+        assertThatThrownBy(() -> authorization.resolveListCustomerFilter(
+                null, authentication(UUID.randomUUID(), "RESTAURANT_OWNER")))
+                .isInstanceOf(AccessDeniedException.class);
     }
 
     private UsernamePasswordAuthenticationToken authentication(UUID subject, String role) {

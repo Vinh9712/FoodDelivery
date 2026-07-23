@@ -10,10 +10,19 @@ spring:
           enabled: false
           lower-case-service-id: true
       routes:
+        # Specific admin ops routes MUST be before auth's /api/v1/admin/** catch-all historically.
+        - id: payment-service
+          uri: lb://payment-service
+          predicates:
+            - Path=/api/v1/admin/payments/**
+        - id: delivery-service
+          uri: lb://delivery-service
+          predicates:
+            - Path=/api/v1/deliveries/**,/api/v1/drivers/**,/api/v1/admin/drivers/**,/api/v1/admin/deliveries/**
         - id: authentication-service
           uri: lb://authentication-service
           predicates:
-            - Path=/api/v1/auth/**,/api/v1/admin/**,/api/v1/sessions/**
+            - Path=/api/v1/auth/**,/api/v1/admin/users/**,/api/v1/sessions/**
         - id: customer-service
           uri: lb://customer-service
           predicates:
@@ -26,10 +35,6 @@ spring:
           uri: lb://order-service
           predicates:
             - Path=/api/v1/orders/**,/api/v1/restaurant-orders/**
-        - id: delivery-service
-          uri: lb://delivery-service
-          predicates:
-            - Path=/api/v1/deliveries/**,/api/v1/drivers/**
         - id: notification-service
           uri: lb://notification-service
           predicates:
@@ -40,6 +45,10 @@ spring:
             allowed-origins:
               - "http://localhost:3000"
               - "http://localhost:5173"
+              - "http://127.0.0.1:3000"
+              - "http://127.0.0.1:5173"
+              - "http://localhost:4173"
+              - "http://127.0.0.1:4173"
             allowed-methods:
               - GET
               - POST
@@ -54,7 +63,7 @@ app:
   internal:
     gateway-secret: ${INTERNAL_GATEWAY_SECRET}
   security:
-    public-paths: /actuator/health/**,/actuator/info,/api/v1/auth/register,/api/v1/auth/login,/api/v1/auth/refresh,/api/v1/auth/logout
+    public-paths: /actuator/health/**,/actuator/info,/api/v1/auth/register,/api/v1/auth/register-driver,/api/v1/auth/register-owner,/api/v1/auth/login,/api/v1/auth/refresh,/api/v1/auth/logout,/api/v1/auth/forgot-password,/api/v1/auth/reset-password
 
 management:
   endpoints:

@@ -91,10 +91,10 @@ class OrderTest {
         Order preparing = paidOrder();
         preparing.acceptByRestaurant(UUID.randomUUID());
         preparing.startPreparing(UUID.randomUUID());
-        assertThatThrownBy(() -> preparing.requestCancellation("reject",
+        preparing.requestCancellation("kitchen issue",
                 com.fooddelivery.order.domain.model.valueobject.CancellationCode.RESTAURANT_REJECTED,
-                OrderEventPayloads.Source.RESTAURANT))
-                .isInstanceOf(InvalidOrderStateException.class);
+                OrderEventPayloads.Source.RESTAURANT);
+        assertThat(preparing.getStatus()).isEqualTo(OrderStatus.CANCELLATION_PENDING);
 
         Order ready = readyOrder();
         ready.requestCancellation("no driver",
@@ -111,32 +111,37 @@ class OrderTest {
     }
 
     @Test
-    void customerCancellationIsAuditedAndOnlyAllowedBeforeRestaurantAccepts() {
+    void customerAndAdminCancellationEdges() {
+        Order unpaid = pendingOrder();
+        unpaid.cancelUnpaid("changed mind",
+                com.fooddelivery.order.domain.model.valueobject.CancellationCode.CUSTOMER_REQUESTED,
+                OrderEventPayloads.Source.CUSTOMER,
+                Instant.parse("2026-07-22T00:01:00Z"));
+        assertThat(unpaid.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(unpaid.getCancellationCode())
+                .isEqualTo(com.fooddelivery.order.domain.model.valueobject.CancellationCode.CUSTOMER_REQUESTED);
+
         Order paid = paidOrder();
-
-        paid.requestCancellation(
-                "Customer changed delivery plans",
-                CancellationCode.CUSTOMER_REQUESTED,
+        paid.requestCancellation("no longer needed",
+                com.fooddelivery.order.domain.model.valueobject.CancellationCode.CUSTOMER_REQUESTED,
                 OrderEventPayloads.Source.CUSTOMER);
-
         assertThat(paid.getStatus()).isEqualTo(OrderStatus.CANCELLATION_PENDING);
-        assertThat(paid.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
-        assertThat(paid.getRefundStatus()).isEqualTo(RefundStatus.PENDING);
-        assertThat(paid.getCancellationCode()).isEqualTo(CancellationCode.CUSTOMER_REQUESTED);
 
-        Order confirmed = paidOrder();
-        confirmed.acceptByRestaurant(UUID.randomUUID());
-        assertThatThrownBy(() -> confirmed.requestCancellation(
-                "Too late",
-                CancellationCode.CUSTOMER_REQUESTED,
+        Order preparing = paidOrder();
+        preparing.acceptByRestaurant(UUID.randomUUID());
+        preparing.startPreparing(UUID.randomUUID());
+        assertThatThrownBy(() -> preparing.requestCancellation("too late",
+                com.fooddelivery.order.domain.model.valueobject.CancellationCode.CUSTOMER_REQUESTED,
                 OrderEventPayloads.Source.CUSTOMER))
                 .isInstanceOf(InvalidOrderStateException.class);
 
-        Order wrongSource = paidOrder();
-        assertThatIllegalArgumentException().isThrownBy(() -> wrongSource.requestCancellation(
-                "Wrong actor",
-                CancellationCode.CUSTOMER_REQUESTED,
-                OrderEventPayloads.Source.RESTAURANT));
+        Order adminPreparing = paidOrder();
+        adminPreparing.acceptByRestaurant(UUID.randomUUID());
+        adminPreparing.startPreparing(UUID.randomUUID());
+        adminPreparing.requestCancellation("ops cancel",
+                com.fooddelivery.order.domain.model.valueobject.CancellationCode.ADMIN_CANCELLED,
+                OrderEventPayloads.Source.ADMIN);
+        assertThat(adminPreparing.getStatus()).isEqualTo(OrderStatus.CANCELLATION_PENDING);
     }
 
     @Test

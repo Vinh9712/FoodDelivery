@@ -24,8 +24,23 @@ public record CreateOrderRequest(
         @NotEmpty(message = "At least one order item is required")
         @Size(max = 50, message = "An order cannot contain more than 50 item entries")
         @Valid
-        List<OrderItemRequest> items
+        List<OrderItemRequest> items,
+
+        /** Optional delivery note / special instructions. */
+        @Size(max = 500, message = "Note cannot exceed 500 characters")
+        String note
 ) {
+    public CreateOrderRequest {
+        if (note != null && note.isBlank()) {
+            note = null;
+        }
+    }
+
+    /** Backward-compatible constructor without note. */
+    public CreateOrderRequest(UUID restaurantId, String deliveryAddress, List<OrderItemRequest> items) {
+        this(restaurantId, deliveryAddress, items, null);
+    }
+
     public record OrderItemRequest(
             @NotNull(message = "Menu item ID is required")
             UUID menuItemId,

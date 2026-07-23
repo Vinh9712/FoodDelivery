@@ -1,13 +1,17 @@
 package com.fooddelivery.notification;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fooddelivery.commonevents.EventContracts;
+import com.fooddelivery.commonevents.IntegrationEventEnvelope;
 import com.fooddelivery.notification.api.dto.NotificationRequest;
 import com.fooddelivery.notification.application.NotificationJobService;
 import com.fooddelivery.notification.application.dispatch.NotificationDispatchGateway;
 import com.fooddelivery.notification.application.dispatch.NotificationJobProcessor;
 import com.fooddelivery.notification.domain.model.Notification;
 import com.fooddelivery.notification.domain.model.valueobject.NotificationStatus;
+import com.fooddelivery.notification.infrastructure.messaging.FulfillmentEventListener;
 import com.fooddelivery.notification.infrastructure.repository.NotificationRepository;
-import com.fooddelivery.notification.infrastructure.messaging.OrderEventListener;
 import com.fooddelivery.notification.infrastructure.repository.ProcessedEventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,8 +22,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 
+import java.time.Instant;
 import java.util.UUID;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doThrow;
@@ -52,10 +56,13 @@ class NotificationJobIntegrationTests {
     private NotificationDispatchGateway dispatchGateway;
 
     @Autowired
-    private OrderEventListener orderEventListener;
+    private FulfillmentEventListener fulfillmentEventListener;
 
     @Autowired
     private ProcessedEventRepository processedEventRepository;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @BeforeEach
     void cleanDatabase() {
@@ -99,21 +106,41 @@ class NotificationJobIntegrationTests {
     }
 
     @Test
-    void duplicateKafkaEventCreatesOnePersistentJob() {
+    void duplicateKafkaFamilyEventCreatesOnePersistentJob() throws Exception {
         UUID eventId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();
         UUID customerId = UUID.randomUUID();
-        Map<String, Object> event = Map.of(
-                "eventId", eventId.toString(),
-                "payload", Map.of(
-                        "orderId", orderId.toString(),
-                        "customerId", customerId.toString()));
+        String json = envelopeJson(eventId, EventContracts.PAYMENT_SUCCEEDED, orderId, customerId);
 
-        orderEventListener.onPaymentProcessed(event);
-        orderEventListener.onPaymentProcessed(event);
+        fulfillmentEventListener.onFulfillmentEvent(json);
+        fulfillmentEventListener.onFulfillmentEvent(json);
 
         assertThat(notificationRepository.count()).isEqualTo(1);
         assertThat(processedEventRepository.count()).isEqualTo(1);
+        Notification job = notificationRepository.findAll().getFirst();
+        assertThat(job.getTitle()).isEqualTo("Payment completed");
+        assertThat(job.getUserId()).isEqualTo(customerId);
+        assertThat(job.getEntityId()).isEqualTo(orderId);
+    }
+
+    private String envelopeJson(UUID eventId, String eventType, UUID orderId, UUID customerId) throws Exception {
+        ObjectNode payload = objectMapper.createObjectNode()
+                .put("orderId", orderId.toString())
+                .put("customerId", customerId.toString())
+                .put("paymentId", UUID.randomUUID().toString())
+                .put("amount", "10000")
+                .put("currency", "VND")
+                .put("paidAt", Instant.parse("2026-07-23T10:00:00Z").toString());
+        IntegrationEventEnvelope<ObjectNode> envelope = new IntegrationEventEnvelope<>(
+                eventId,
+                eventType,
+                1,
+                Instant.parse("2026-07-23T10:00:00Z"),
+                "Payment",
+                orderId,
+                1L,
+                payload);
+        return objectMapper.writeValueAsString(envelope);
     }
 
     private NotificationRequest request() {
