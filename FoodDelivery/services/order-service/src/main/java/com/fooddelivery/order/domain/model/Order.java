@@ -305,6 +305,22 @@ public class Order {
     }
 
 
+    public void applyNote(String note) {
+        if (this.status != OrderStatus.PENDING) {
+            throw new IllegalStateException("Note can only be set while PENDING");
+        }
+        if (note == null || note.isBlank()) {
+            this.note = null;
+            return;
+        }
+        String trimmed = note.trim();
+        if (trimmed.length() > 500) {
+            throw new IllegalArgumentException("Note cannot exceed 500 characters");
+        }
+        this.note = trimmed;
+        this.updatedAt = Instant.now();
+    }
+
     public void addItem(UUID menuItemId, String itemName, String description,
                         BigDecimal unitPrice, int quantity) {
         if (this.status != OrderStatus.PENDING) {
@@ -780,7 +796,9 @@ public class Order {
      */
     private static boolean isCancellationAllowed(OrderStatus current, CancellationCode code) {
         return switch (code) {
-            case RESTAURANT_REJECTED -> current == OrderStatus.PAID || current == OrderStatus.CONFIRMED;
+            case RESTAURANT_REJECTED -> current == OrderStatus.PAID
+                    || current == OrderStatus.CONFIRMED
+                    || current == OrderStatus.PREPARING;
             case RESTAURANT_ACCEPTANCE_TIMEOUT -> current == OrderStatus.PAID;
             case DELIVERY_FAILED -> current == OrderStatus.READY_FOR_PICKUP
                     || current == OrderStatus.PICKED_UP

@@ -40,6 +40,36 @@ public class OrderAuthorizationService {
     }
 
     /**
+     * Reorder: only the owning customer (not admin acting as proxy).
+     */
+    public boolean canReorder(UUID orderId, Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return false;
+        }
+        if (!hasRole(authentication, "CUSTOMER")) {
+            return false;
+        }
+        try {
+            UUID customerId = UUID.fromString(authentication.getName());
+            return orderRepository.findById(orderId)
+                    .map(order -> customerId.equals(order.getCustomerId()))
+                    .orElse(false);
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
+    }
+
+    /**
+     * History path customerId must match principal unless admin.
+     */
+    public UUID resolveHistoryCustomerId(UUID pathCustomerId, Authentication authentication) {
+        if (pathCustomerId == null) {
+            throw new AccessDeniedException("customerId is required");
+        }
+        return resolveListCustomerFilter(pathCustomerId, authentication);
+    }
+
+    /**
      * Resolves the customer filter for {@code GET /api/v1/orders}.
      * <ul>
      *   <li>ADMIN: optional {@code userId} (null = all customers)</li>

@@ -88,10 +88,15 @@ public class SecurityConfig {
                         .pathMatchers("/api/v1/restaurant-orders/**").hasAnyRole("RESTAURANT_OWNER", "ADMIN")
                         .pathMatchers(HttpMethod.POST, "/api/v1/orders").hasRole("CUSTOMER")
                         .pathMatchers(HttpMethod.POST, "/api/v1/orders/*/cancel").hasAnyRole("CUSTOMER", "ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/api/v1/orders/*/reorder").hasRole("CUSTOMER")
                         .pathMatchers(HttpMethod.GET, "/api/v1/orders").hasAnyRole("CUSTOMER", "ADMIN")
+                        .pathMatchers(HttpMethod.GET, "/api/v1/orders/history/**").hasAnyRole("CUSTOMER", "ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/api/v1/orders/preview").hasRole("CUSTOMER")
                         .pathMatchers("/api/v1/notifications/me/**").authenticated()
                         .pathMatchers(HttpMethod.GET, "/api/v1/notifications").hasRole("ADMIN")
                         .pathMatchers(HttpMethod.POST, "/api/v1/deliveries/*/assign-driver/*").hasRole("ADMIN")
+                        .pathMatchers("/api/v1/admin/drivers/**", "/api/v1/admin/deliveries/**",
+                                "/api/v1/admin/payments/**").hasRole("ADMIN")
                         .anyExchange().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt
                         .jwtAuthenticationConverter(new ReactiveJwtAuthenticationConverterAdapter(

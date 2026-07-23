@@ -205,6 +205,10 @@ public class PaymentApplicationService {
         return payment;
     }
 
+    public PaymentResponse toPublicResponse(Payment payment) {
+        return toResponse(payment);
+    }
+
     private PaymentResponse toResponse(Payment payment) {
         return switch (payment.getStatus()) {
             case PAID -> new PaymentResponse(payment.getOrderId(), "SUCCESS",

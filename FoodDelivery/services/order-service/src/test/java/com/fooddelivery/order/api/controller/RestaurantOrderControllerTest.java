@@ -51,6 +51,8 @@ class RestaurantOrderControllerTest {
     private RestaurantOrderAuthorizationService authorizationService;
     @Mock
     private OrderMapper orderMapper;
+    @Mock
+    private com.fooddelivery.order.infrastructure.repository.OrderRepository orderRepository;
 
     private RestaurantOrderController controller;
     private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
@@ -62,7 +64,7 @@ class RestaurantOrderControllerTest {
     @BeforeEach
     void setUp() {
         controller = new RestaurantOrderController(
-                restaurantOrderService, authorizationService, orderMapper);
+                restaurantOrderService, authorizationService, orderMapper, orderRepository);
     }
 
     @Test

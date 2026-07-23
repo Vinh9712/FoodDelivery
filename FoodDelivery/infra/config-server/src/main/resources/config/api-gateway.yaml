@@ -10,10 +10,19 @@ spring:
           enabled: false
           lower-case-service-id: true
       routes:
+        # Specific admin ops routes MUST be before auth's /api/v1/admin/** catch-all historically.
+        - id: payment-service
+          uri: lb://payment-service
+          predicates:
+            - Path=/api/v1/admin/payments/**
+        - id: delivery-service
+          uri: lb://delivery-service
+          predicates:
+            - Path=/api/v1/deliveries/**,/api/v1/drivers/**,/api/v1/admin/drivers/**,/api/v1/admin/deliveries/**
         - id: authentication-service
           uri: lb://authentication-service
           predicates:
-            - Path=/api/v1/auth/**,/api/v1/admin/**,/api/v1/sessions/**
+            - Path=/api/v1/auth/**,/api/v1/admin/users/**,/api/v1/sessions/**
         - id: customer-service
           uri: lb://customer-service
           predicates:
@@ -26,10 +35,6 @@ spring:
           uri: lb://order-service
           predicates:
             - Path=/api/v1/orders/**,/api/v1/restaurant-orders/**
-        - id: delivery-service
-          uri: lb://delivery-service
-          predicates:
-            - Path=/api/v1/deliveries/**,/api/v1/drivers/**
         - id: notification-service
           uri: lb://notification-service
           predicates:

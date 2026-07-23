@@ -150,6 +150,32 @@ public class DeliveryAssignmentService {
     }
 
     /**
+     * Assigned driver rejects the job → release driver and re-queue assignment.
+     */
+    @Transactional
+    public Delivery rejectAssignmentByDriver(UUID deliveryId, UUID driverUserId) {
+        Delivery delivery = deliveryRepository.findByIdForUpdate(deliveryId)
+                .orElseThrow(() -> new DeliveryNotFoundException(deliveryId));
+        if (delivery.getStatus() != DeliveryStatus.DRIVER_ASSIGNED || delivery.getDriverId() == null) {
+            throw new com.fooddelivery.delivery.domain.exception.InvalidDeliveryStateException(delivery.getStatus());
+        }
+        Driver assigned = driverRepository.findByIdForUpdate(delivery.getDriverId())
+                .orElseThrow(() -> new DriverNotFoundException(delivery.getDriverId()));
+        if (assigned.getUserId() == null || !assigned.getUserId().equals(driverUserId)) {
+            throw new DeliveryNotFoundException(deliveryId);
+        }
+        UUID previousDriverId = delivery.rejectAssignment(clock.instant());
+        delivery.recordAssignmentFailure("Driver rejected assignment", clock.instant().plus(retryBaseDelay));
+        deliveryRepository.save(delivery);
+        if (previousDriverId != null) {
+            releaseDriverIfIdle(previousDriverId, delivery.getId());
+        }
+        // Immediate reassignment attempt (may queue if no candidates)
+        tryAssign(delivery);
+        return deliveryRepository.findById(deliveryId).orElse(delivery);
+    }
+
+    /**
      * Release driver availability if they have no other active deliveries.
      */
     @Transactional
@@ -268,6 +294,9 @@ public class DeliveryAssignmentService {
 
             ObjectNode driverNode = objectMapper.createObjectNode();
             driverNode.put("driverId", driver.getId().toString());
+            if (driver.getUserId() != null) {
+                driverNode.put("userId", driver.getUserId().toString());
+            }
             driverNode.put("fullName", driver.getFullName());
             driverNode.put("phone", driver.getPhone());
             driverNode.put("vehicleType", driver.getVehicleType().name());

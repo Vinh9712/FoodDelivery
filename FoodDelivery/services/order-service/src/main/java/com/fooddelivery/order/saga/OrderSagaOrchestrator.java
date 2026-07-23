@@ -73,12 +73,19 @@ public class OrderSagaOrchestrator {
                             String deliveryAddress,
                             List<RequestedItem> requestedItems) {
         return placeOrder(customerId, restaurantId, deliveryAddress,
-                "legacy-" + UUID.randomUUID(), requestedItems);
+                "legacy-" + UUID.randomUUID(), requestedItems, null);
     }
 
     public Order placeOrder(UUID customerId, UUID restaurantId,
                             String deliveryAddress, String clientRequestId,
                             List<RequestedItem> requestedItems) {
+        return placeOrder(customerId, restaurantId, deliveryAddress, clientRequestId, requestedItems, null);
+    }
+
+    public Order placeOrder(UUID customerId, UUID restaurantId,
+                            String deliveryAddress, String clientRequestId,
+                            List<RequestedItem> requestedItems,
+                            String note) {
 
         validateClientRequestId(clientRequestId);
         var existingOrder = orderRepository.findByCustomerIdAndClientRequestId(customerId, clientRequestId);
@@ -95,7 +102,7 @@ public class OrderSagaOrchestrator {
 
         // ── BƯỚC 1: Tạo Order ở trạng thái PENDING (kèm immutable pickup snapshot) ──
         Order order = createPendingOrder(customerId, restaurantId, deliveryAddress,
-                deliveryFee, BigDecimal.ZERO, clientRequestId, pricedQuote);
+                deliveryFee, BigDecimal.ZERO, clientRequestId, pricedQuote, note);
 
         log.info(" Đơn hàng PENDING đã tạo: orderId={}, totalAmount={}",
                 order.getId(), order.getTotalAmount());
@@ -170,6 +177,16 @@ public class OrderSagaOrchestrator {
                                        BigDecimal discountAmount,
                                        String clientRequestId,
                                        PricedQuote pricedQuote) {
+        return createPendingOrder(customerId, restaurantId, deliveryAddress, deliveryFee,
+                discountAmount, clientRequestId, pricedQuote, null);
+    }
+
+    protected Order createPendingOrder(UUID customerId, UUID restaurantId,
+                                       String deliveryAddress, BigDecimal deliveryFee,
+                                       BigDecimal discountAmount,
+                                       String clientRequestId,
+                                       PricedQuote pricedQuote,
+                                       String note) {
         return transactionTemplate.execute(status -> {
             Order order = Order.create(customerId, restaurantId, deliveryAddress,
                     deliveryFee, discountAmount, clientRequestId, pricedQuote.pickup());
@@ -180,12 +197,52 @@ public class OrderSagaOrchestrator {
                             item.unitPrice(), item.quantity());
                 }
             }
+            order.applyNote(note);
 
             persistOutboxEvents(order);
             order = orderRepository.save(order);
 
             return order;
         });
+    }
+
+    /**
+     * Server-side price preview without creating an order (reuse menu quote + delivery fee).
+     */
+    public OrderPreviewQuote preview(UUID restaurantId, List<RequestedItem> requestedItems) {
+        PricedQuote pricedQuote = quoteAndValidateItems(restaurantId, requestedItems);
+        BigDecimal subtotal = BigDecimal.ZERO;
+        var lines = new java.util.ArrayList<OrderPreviewQuote.Line>();
+        if (pricedQuote.items() != null) {
+            for (var item : pricedQuote.items()) {
+                BigDecimal line = item.unitPrice().multiply(BigDecimal.valueOf(item.quantity()));
+                subtotal = subtotal.add(line);
+                lines.add(new OrderPreviewQuote.Line(
+                        item.menuItemId(), item.itemName(), item.unitPrice(), item.quantity(), line));
+            }
+        }
+        BigDecimal discount = BigDecimal.ZERO;
+        BigDecimal total = subtotal.add(deliveryFee).subtract(discount);
+        if (total.compareTo(BigDecimal.ZERO) < 0) {
+            total = BigDecimal.ZERO;
+        }
+        return new OrderPreviewQuote(restaurantId, subtotal, deliveryFee, discount, total, List.copyOf(lines));
+    }
+
+    public record OrderPreviewQuote(
+            UUID restaurantId,
+            BigDecimal subtotal,
+            BigDecimal deliveryFee,
+            BigDecimal discountAmount,
+            BigDecimal totalAmount,
+            List<Line> items) {
+        public record Line(
+                UUID menuItemId,
+                String name,
+                BigDecimal unitPrice,
+                int quantity,
+                BigDecimal lineTotal) {
+        }
     }
 
     /**

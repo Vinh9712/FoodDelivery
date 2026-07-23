@@ -8,9 +8,13 @@ import com.fooddelivery.authentication.api.dto.response.AdminUserResponse;
 import com.fooddelivery.authentication.api.dto.response.DashboardStatsResponse;
 import com.fooddelivery.authentication.api.dto.response.UserDetailResponse;
 import com.fooddelivery.authentication.application.command.*;
+import com.fooddelivery.authentication.application.command.ForgotPasswordCommand;
 import com.fooddelivery.authentication.application.usecase.AdminUserUseCase;
+import com.fooddelivery.authentication.application.usecase.PasswordUseCase;
 import com.fooddelivery.authentication.config.UserPrincipal;
 import com.fooddelivery.authentication.domain.model.enums.UserRole;
+import com.fooddelivery.authentication.domain.repository.UserRepository;
+import com.fooddelivery.commonweb.exception.BusinessRuleException;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -26,9 +30,16 @@ import java.util.UUID;
 public class AdminUserController {
 
     private final AdminUserUseCase adminUserUseCase;
+    private final PasswordUseCase passwordUseCase;
+    private final UserRepository userRepository;
 
-    public AdminUserController(AdminUserUseCase adminUserUseCase) {
+    public AdminUserController(
+            AdminUserUseCase adminUserUseCase,
+            PasswordUseCase passwordUseCase,
+            UserRepository userRepository) {
         this.adminUserUseCase = adminUserUseCase;
+        this.passwordUseCase = passwordUseCase;
+        this.userRepository = userRepository;
     }
 
     @GetMapping
@@ -93,5 +104,19 @@ public class AdminUserController {
     public ResponseEntity<ApiResponse<DashboardStatsResponse>> getStats() {
         DashboardStatsResponse stats = adminUserUseCase.getStats();
         return ResponseEntity.ok(ApiResponse.ok(stats));
+    }
+
+    /**
+     * Issues a password-reset token for the user (raw token logged server-side for support).
+     */
+    @PostMapping("/{id}/reset-password")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        var user = userRepository.findById(id)
+                .orElseThrow(() -> new BusinessRuleException("User not found"));
+        passwordUseCase.forgotPassword(new ForgotPasswordCommand(user.getEmail()));
+        return ResponseEntity.ok(ApiResponse.ok(null,
+                "Password reset token issued (check auth-service logs in local/dev)"));
     }
 }

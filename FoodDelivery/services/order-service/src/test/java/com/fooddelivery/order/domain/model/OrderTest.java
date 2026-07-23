@@ -90,10 +90,10 @@ class OrderTest {
         Order preparing = paidOrder();
         preparing.acceptByRestaurant(UUID.randomUUID());
         preparing.startPreparing(UUID.randomUUID());
-        assertThatThrownBy(() -> preparing.requestCancellation("reject",
+        preparing.requestCancellation("kitchen issue",
                 com.fooddelivery.order.domain.model.valueobject.CancellationCode.RESTAURANT_REJECTED,
-                OrderEventPayloads.Source.RESTAURANT))
-                .isInstanceOf(InvalidOrderStateException.class);
+                OrderEventPayloads.Source.RESTAURANT);
+        assertThat(preparing.getStatus()).isEqualTo(OrderStatus.CANCELLATION_PENDING);
 
         Order ready = readyOrder();
         ready.requestCancellation("no driver",
