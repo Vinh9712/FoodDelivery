@@ -109,6 +109,13 @@ public class OrderItem {
     }
 
     // Backward compatibility aliases
+    public UUID getId() { return this.id; }
+    public UUID getOrderId() { return this.orderId; }
+    public UUID getMenuItemId() { return this.menuItemId; }
+    public String getItemDescription() { return this.itemDescription; }
+    public int getQuantity() { return this.quantity; }
+    public BigDecimal getSubtotal() { return this.subtotal; }
+    public Instant getCreatedAt() { return this.createdAt; }
     public BigDecimal getUnitPrice() { return this.unitPrice; }
     public String getItemName() { return this.itemName; }
 }

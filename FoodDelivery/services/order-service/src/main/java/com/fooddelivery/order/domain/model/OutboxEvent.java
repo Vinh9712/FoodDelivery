@@ -112,6 +112,22 @@ public class OutboxEvent {
         return event;
     }
 
+    public UUID getId() { return id; }
+    public String getAggregateType() { return aggregateType; }
+    public UUID getAggregateId() { return aggregateId; }
+    public String getEventType() { return eventType; }
+    public int getEventVersion() { return eventVersion; }
+    public long getAggregateSequence() { return aggregateSequence; }
+    public String getPartitionKey() { return partitionKey; }
+    public Map<String, Object> getPayload() { return payload; }
+    public Instant getPublishedAt() { return publishedAt; }
+    public int getAttempts() { return attempts; }
+    public Instant getNextAttemptAt() { return nextAttemptAt; }
+    public String getLastError() { return lastError; }
+    public boolean isDeadLettered() { return deadLettered; }
+    public Instant getDeadLetteredAt() { return deadLetteredAt; }
+    public Instant getCreatedAt() { return createdAt; }
+
     public void markPublished() {
         this.publishedAt = Instant.now();
         this.nextAttemptAt = null;

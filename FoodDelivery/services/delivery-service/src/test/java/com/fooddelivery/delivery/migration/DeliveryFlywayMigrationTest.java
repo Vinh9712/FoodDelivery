@@ -72,12 +72,16 @@ class DeliveryFlywayMigrationTest {
 
         Flyway latest = flyway();
         latest.migrate();
-        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("9");
+        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("11");
         assertThat(indexExists("idx_delivery_outbox_due_sequence")).isTrue();
         assertThat(constraintExists("uq_delivery_outbox_aggregate_sequence")).isTrue();
+        assertThat(rowExists(
+                "drivers",
+                "user_id",
+                "019f7567-133e-7bfa-bd16-e788321cec33")).isTrue();
 
         assertThatCode(this::validateHibernateSchema)
-                .as("Hibernate ddl-auto=validate must succeed on schema after V9")
+                .as("Hibernate ddl-auto=validate must succeed on schema after V11")
                 .doesNotThrowAnyException();
     }
 
@@ -136,6 +140,10 @@ class DeliveryFlywayMigrationTest {
 
     private boolean indexExists(String index) throws Exception {
         return exists("SELECT 1 FROM pg_indexes WHERE indexname = '" + index + "'");
+    }
+
+    private boolean rowExists(String table, String column, String value) throws Exception {
+        return exists("SELECT 1 FROM " + table + " WHERE " + column + " = '" + value + "'");
     }
 
     private boolean exists(String sql) throws Exception {

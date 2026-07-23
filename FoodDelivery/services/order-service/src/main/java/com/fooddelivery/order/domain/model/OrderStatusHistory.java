@@ -49,6 +49,14 @@ public class OrderStatusHistory {
         this.createdAt = Instant.now();
     }
 
+    public UUID getId() { return id; }
+    public UUID getOrderId() { return orderId; }
+    public OrderStatus getFromStatus() { return fromStatus; }
+    public OrderStatus getToStatus() { return toStatus; }
+    public String getNote() { return note; }
+    public UUID getChangedBy() { return changedBy; }
+    public Instant getCreatedAt() { return createdAt; }
+
     public static OrderStatusHistory of(UUID orderId, OrderStatus fromStatus, OrderStatus toStatus, String note, UUID changedBy) {
         return new OrderStatusHistory(UuidCreator.nextUuidV7(), orderId, fromStatus, toStatus, note, changedBy);
     }

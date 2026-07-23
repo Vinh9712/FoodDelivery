@@ -95,6 +95,20 @@ public class DeferredIntegrationEvent {
         return event;
     }
 
+    public UUID getId() { return id; }
+    public String getConsumerName() { return consumerName; }
+    public UUID getEventId() { return eventId; }
+    public String getAggregateType() { return aggregateType; }
+    public UUID getAggregateId() { return aggregateId; }
+    public long getAggregateSequence() { return aggregateSequence; }
+    public String getEventJson() { return eventJson; }
+    public Instant getReceivedAt() { return receivedAt; }
+    public Status getStatus() { return status; }
+    public int getAttempts() { return attempts; }
+    public Instant getNextAttemptAt() { return nextAttemptAt; }
+    public String getLastError() { return lastError; }
+    public Instant getDeadLetteredAt() { return deadLetteredAt; }
+
     public void scheduleRetry(Instant nextAttemptAt, String error) {
         this.attempts += 1;
         this.nextAttemptAt = nextAttemptAt;

@@ -106,11 +106,11 @@ public class OrderController {
     }
 
     /**
-     * List/search orders.
-     * Customer: own orders. Admin: system-wide filters (status, restaurantId, from, to, userId/customerId).
+     * Admin list/search endpoint. Customer history is served by {@link CustomerOrderController}
+     * at {@code GET /api/v1/orders}; keeping distinct mappings prevents ambiguous startup routes.
      */
-    @GetMapping
-    @PreAuthorize("hasAnyRole('CUSTOMER','ADMIN')")
+    @GetMapping("/admin")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Page<OrderResponse>> listOrders(
             @RequestParam(required = false) UUID userId,
             @RequestParam(required = false) UUID customerId,
@@ -174,8 +174,8 @@ public class OrderController {
                 "Fixed ETA stub (1 hour)"));
     }
 
-    @PostMapping("/{id}/cancel")
-    @PreAuthorize("@orderAuthorization.canCancel(#id, authentication)")
+    @PostMapping("/{id}/admin-cancel")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<OrderResponse> cancelOrder(
             @PathVariable UUID id,
             @Valid @RequestBody CancelOrderRequest request,

@@ -676,6 +676,41 @@ public class Order {
     }
 
 
+    public UUID getId() { return id; }
+    public UUID getCustomerId() { return customerId; }
+    public UUID getRestaurantId() { return restaurantId; }
+    public String getClientRequestId() { return clientRequestId; }
+    public long getVersion() { return version; }
+    public UUID getDriverId() { return driverId; }
+    public OrderStatus getStatus() { return status; }
+    public BigDecimal getTotalAmount() { return totalAmount; }
+    public AssignedDriverInfo getAssignedDriverSnapshot() { return assignedDriverSnapshot; }
+    public DeliveryAddressSnapshot getDeliveryAddressSnapshot() { return deliveryAddressSnapshot; }
+    public BigDecimal getSubtotal() { return subtotal; }
+    public BigDecimal getDeliveryFee() { return deliveryFee; }
+    public BigDecimal getDiscountAmount() { return discountAmount; }
+    public PaymentStatus getPaymentStatus() { return paymentStatus; }
+    public RefundStatus getRefundStatus() { return refundStatus; }
+    public Instant getPaidAt() { return paidAt; }
+    public Instant getRestaurantResponseDeadline() { return restaurantResponseDeadline; }
+    public PickupAddressSnapshot getPickupAddressSnapshot() { return pickupAddressSnapshot; }
+    public CancellationCode getCancellationCode() { return cancellationCode; }
+    public String getCancellationReason() { return cancellationReason; }
+    public long getEventSequence() { return eventSequence; }
+    public UUID getDeliveryId() { return deliveryId; }
+    public int getDeliveryScheduleAttempts() { return deliveryScheduleAttempts; }
+    public Instant getNextDeliveryScheduleAttemptAt() { return nextDeliveryScheduleAttemptAt; }
+    public String getLastDeliveryScheduleError() { return lastDeliveryScheduleError; }
+    public int getRefundAttempts() { return refundAttempts; }
+    public Instant getNextRefundAttemptAt() { return nextRefundAttemptAt; }
+    public String getLastRefundError() { return lastRefundError; }
+    public String getPromotionCode() { return promotionCode; }
+    public String getNote() { return note; }
+    public List<OrderItem> getItems() { return items; }
+    public List<OrderStatusHistory> getStatusHistory() { return statusHistory; }
+    public Instant getCreatedAt() { return createdAt; }
+    public Instant getUpdatedAt() { return updatedAt; }
+
     public Optional<AssignedDriverInfo> getAssignedDriver() {
         return Optional.ofNullable(assignedDriverSnapshot);
     }
@@ -780,7 +815,6 @@ public class Order {
             case RESTAURANT_ACCEPTANCE_TIMEOUT -> source == OrderEventPayloads.Source.SYSTEM_TIMEOUT;
             case DELIVERY_FAILED -> source == OrderEventPayloads.Source.DELIVERY_EVENT
                     || source == OrderEventPayloads.Source.DELIVERY_RECONCILIATION;
-            case CUSTOMER_REQUESTED -> source == OrderEventPayloads.Source.CUSTOMER;
             case ADMIN_CANCELLED -> source == OrderEventPayloads.Source.ADMIN;
         };
         if (!valid) {

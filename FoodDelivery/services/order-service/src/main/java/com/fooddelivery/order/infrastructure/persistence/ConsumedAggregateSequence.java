@@ -55,6 +55,12 @@ public class ConsumedAggregateSequence {
         this.updatedAt = updatedAt;
     }
 
+    public String getConsumerName() { return consumerName; }
+    public String getAggregateType() { return aggregateType; }
+    public UUID getAggregateId() { return aggregateId; }
+    public long getLastAppliedSequence() { return lastAppliedSequence; }
+    public Instant getUpdatedAt() { return updatedAt; }
+
     public void advanceTo(long sequence, Instant now) {
         if (sequence < this.lastAppliedSequence) {
             throw new IllegalArgumentException(
