@@ -34,14 +34,16 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 
     /**
      * Admin/customer order list. Null filters are ignored.
+     * <p>Uses SpEL null checks so PostgreSQL does not need to infer types for
+     * {@code :param is null} bindings (Instant/UUID null → SQLState 42P18).
      */
     @Query("""
             select o from Order o
-            where (:customerId is null or o.customerId = :customerId)
-              and (:status is null or o.status = :status)
-              and (:restaurantId is null or o.restaurantId = :restaurantId)
-              and (:from is null or o.createdAt >= :from)
-              and (:to is null or o.createdAt <= :to)
+            where (:#{#customerId == null} = true or o.customerId = :customerId)
+              and (:#{#status == null} = true or o.status = :status)
+              and (:#{#restaurantId == null} = true or o.restaurantId = :restaurantId)
+              and (:#{#from == null} = true or o.createdAt >= :from)
+              and (:#{#to == null} = true or o.createdAt <= :to)
             """)
     Page<Order> findAllFiltered(
             @Param("customerId") UUID customerId,
