@@ -110,6 +110,40 @@ class OrderTest {
     }
 
     @Test
+    void customerAndAdminCancellationEdges() {
+        Order unpaid = pendingOrder();
+        unpaid.cancelUnpaid("changed mind",
+                com.fooddelivery.order.domain.model.valueobject.CancellationCode.CUSTOMER_REQUESTED,
+                OrderEventPayloads.Source.CUSTOMER,
+                Instant.parse("2026-07-22T00:01:00Z"));
+        assertThat(unpaid.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(unpaid.getCancellationCode())
+                .isEqualTo(com.fooddelivery.order.domain.model.valueobject.CancellationCode.CUSTOMER_REQUESTED);
+
+        Order paid = paidOrder();
+        paid.requestCancellation("no longer needed",
+                com.fooddelivery.order.domain.model.valueobject.CancellationCode.CUSTOMER_REQUESTED,
+                OrderEventPayloads.Source.CUSTOMER);
+        assertThat(paid.getStatus()).isEqualTo(OrderStatus.CANCELLATION_PENDING);
+
+        Order preparing = paidOrder();
+        preparing.acceptByRestaurant(UUID.randomUUID());
+        preparing.startPreparing(UUID.randomUUID());
+        assertThatThrownBy(() -> preparing.requestCancellation("too late",
+                com.fooddelivery.order.domain.model.valueobject.CancellationCode.CUSTOMER_REQUESTED,
+                OrderEventPayloads.Source.CUSTOMER))
+                .isInstanceOf(InvalidOrderStateException.class);
+
+        Order adminPreparing = paidOrder();
+        adminPreparing.acceptByRestaurant(UUID.randomUUID());
+        adminPreparing.startPreparing(UUID.randomUUID());
+        adminPreparing.requestCancellation("ops cancel",
+                com.fooddelivery.order.domain.model.valueobject.CancellationCode.ADMIN_CANCELLED,
+                OrderEventPayloads.Source.ADMIN);
+        assertThat(adminPreparing.getStatus()).isEqualTo(OrderStatus.CANCELLATION_PENDING);
+    }
+
+    @Test
     void paymentFailureCancelsOnlyPendingOrdersWithoutRefund() {
         Order order = pendingOrder();
         Instant failedAt = Instant.parse("2026-07-22T00:01:00Z");

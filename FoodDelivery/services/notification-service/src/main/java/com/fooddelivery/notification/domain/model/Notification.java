@@ -142,9 +142,12 @@ public class Notification {
     }
 
     public void markRead() {
-        if (isRead) return;
+        if (isRead) {
+            return;
+        }
         this.isRead = true;
         this.readAt = Instant.now();
+        this.updatedAt = this.readAt;
     }
 
     public void recordFailure(String error, Instant retryAt, int maxAttempts) {

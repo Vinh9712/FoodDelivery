@@ -37,6 +37,11 @@ public class RegisterCustomerUseCaseImpl implements RegisterCustomerUseCase {
     @Override
     @Transactional
     public UserRegistrationResponse execute(RegisterCustomerCommand command) {
+        UserRole role = command.role() != null ? command.role() : UserRole.CUSTOMER;
+        if (role == UserRole.ADMIN) {
+            throw new BusinessRuleException("Cannot self-register as ADMIN");
+        }
+
         if (userRepository.existsByEmail(command.email().trim().toLowerCase())) {
             throw new BusinessRuleException("Email already exists");
         }
@@ -46,7 +51,7 @@ public class RegisterCustomerUseCaseImpl implements RegisterCustomerUseCase {
         }
 
         String passwordHash = passwordEncoder.encode(command.password());
-        User user = User.register(command.email(), command.phone(), passwordHash, UserRole.CUSTOMER);
+        User user = User.register(command.email(), command.phone(), passwordHash, role);
         user = userRepository.save(user);
 
         try {

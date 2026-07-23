@@ -36,4 +36,12 @@ public class UserSessionRepositoryAdapter implements UserSessionRepository {
     public void markNotCurrentByUserId(UUID userId) {
         userSessionJPARepository.markNotCurrentByUserId(userId);
     }
+
+    @Override
+    public void revokeAllByUserId(UUID userId) {
+        for (UserSession session : userSessionJPARepository.findAllByUserId(userId)) {
+            session.softDelete();
+            userSessionJPARepository.save(session);
+        }
+    }
 }

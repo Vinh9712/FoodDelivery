@@ -14,6 +14,9 @@ import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverterAdapter;
 import org.springframework.security.web.server.SecurityWebFilterChain;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.reactive.CorsConfigurationSource;
+import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
 
@@ -36,10 +39,25 @@ public class SecurityConfig {
     private List<String> publicPaths;
 
     @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOriginPatterns(List.of("*"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
+    }
+
+    @Bean
     @Profile("!insecure")
     public SecurityWebFilterChain secureFilterChain(ServerHttpSecurity http) {
         http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers(HttpMethod.OPTIONS).permitAll()
                         .pathMatchers(publicPaths.toArray(String[]::new)).permitAll()
@@ -68,7 +86,11 @@ public class SecurityConfig {
                                 "/api/v1/items/**",
                                 "/api/v1/categories/**").hasAnyRole("RESTAURANT_OWNER", "ADMIN")
                         .pathMatchers("/api/v1/restaurant-orders/**").hasAnyRole("RESTAURANT_OWNER", "ADMIN")
-                        .pathMatchers(HttpMethod.POST, "/api/v1/orders/**").hasRole("CUSTOMER")
+                        .pathMatchers(HttpMethod.POST, "/api/v1/orders").hasRole("CUSTOMER")
+                        .pathMatchers(HttpMethod.POST, "/api/v1/orders/*/cancel").hasAnyRole("CUSTOMER", "ADMIN")
+                        .pathMatchers(HttpMethod.GET, "/api/v1/orders").hasAnyRole("CUSTOMER", "ADMIN")
+                        .pathMatchers("/api/v1/notifications/me/**").authenticated()
+                        .pathMatchers(HttpMethod.GET, "/api/v1/notifications").hasRole("ADMIN")
                         .pathMatchers(HttpMethod.POST, "/api/v1/deliveries/*/assign-driver/*").hasRole("ADMIN")
                         .anyExchange().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt
@@ -96,7 +118,9 @@ public class SecurityConfig {
     public SecurityWebFilterChain insecureFilterChain(ServerHttpSecurity http) {
         http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeExchange(exchanges -> exchanges.anyExchange().permitAll());
         return http.build();
     }
 }
+
