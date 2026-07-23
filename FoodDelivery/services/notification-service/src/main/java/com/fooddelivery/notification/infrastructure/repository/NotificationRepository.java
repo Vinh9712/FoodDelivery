@@ -21,6 +21,10 @@ import java.util.UUID;
 public interface NotificationRepository extends JpaRepository<Notification, UUID> {
     Page<Notification> findByUserId(UUID userId, Pageable pageable);
 
+    List<Notification> findByUserIdOrderByCreatedAtDesc(UUID userId);
+
+    long countByUserIdAndIsReadFalse(UUID userId);
+
     Optional<Notification> findByRequestKey(String requestKey);
 
     List<Notification> findTop200ByOrderByCreatedAtDesc();
