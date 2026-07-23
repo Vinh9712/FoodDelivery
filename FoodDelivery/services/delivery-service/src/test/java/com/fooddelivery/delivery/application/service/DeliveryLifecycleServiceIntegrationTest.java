@@ -2,6 +2,7 @@ package com.fooddelivery.delivery.application.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fooddelivery.delivery.api.dto.DeliveryRequest;
 import com.fooddelivery.delivery.domain.exception.DeliveryAccessDeniedException;
 import com.fooddelivery.delivery.domain.exception.DeliveryNotFoundException;
 import com.fooddelivery.delivery.domain.exception.InvalidDeliveryStateException;
@@ -22,6 +23,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Duration;
 import java.util.UUID;
 
@@ -41,13 +43,19 @@ class DeliveryLifecycleServiceIntegrationTest {
         }
 
         @Bean
+        Clock clock() {
+            return Clock.systemUTC();
+        }
+
+        @Bean
         DeliveryAssignmentService deliveryAssignmentService(
                 DeliveryRepository deliveryRepository,
                 DriverRepository driverRepository,
                 OutboxEventRepository outboxEventRepository,
-                ObjectMapper objectMapper) {
+                ObjectMapper objectMapper,
+                Clock clock) {
             return new DeliveryAssignmentService(
-                    deliveryRepository, driverRepository, outboxEventRepository, objectMapper,
+                    deliveryRepository, driverRepository, outboxEventRepository, objectMapper, clock,
                     Duration.ofSeconds(1), Duration.ofSeconds(10), 5);
         }
 
@@ -57,10 +65,11 @@ class DeliveryLifecycleServiceIntegrationTest {
                 DriverRepository driverRepository,
                 OutboxEventRepository outboxEventRepository,
                 DeliveryAssignmentService assignmentService,
-                ObjectMapper objectMapper) {
+                ObjectMapper objectMapper,
+                Clock clock) {
             return new DeliveryLifecycleService(
                     deliveryRepository, driverRepository, outboxEventRepository,
-                    assignmentService, objectMapper);
+                    assignmentService, objectMapper, clock);
         }
     }
 
@@ -106,7 +115,7 @@ class DeliveryLifecycleServiceIntegrationTest {
         lifecycleService.accept(delivery.getId(), userId);
 
         var event = outboxEventRepository.findAll().stream()
-                .filter(e -> "driver.assigned".equals(e.getEventType()))
+                .filter(e -> "DriverAssigned".equals(e.getEventType()))
                 .findFirst().orElseThrow();
         JsonNode payload = objectMapper.readTree(event.getPayload());
         assertThat(payload.path("customerId").asText()).isEqualTo(customerId.toString());
@@ -128,7 +137,7 @@ class DeliveryLifecycleServiceIntegrationTest {
         assertThat(delivery.getStatus()).isEqualTo(DeliveryStatus.DELIVERED);
         assertThat(driver.isAvailable()).isTrue();
         assertThat(outboxEventRepository.findAll().stream()
-                .anyMatch(e -> "delivery.completed".equals(e.getEventType()))).isTrue();
+                .anyMatch(e -> "DeliveryCompleted".equals(e.getEventType()))).isTrue();
     }
 
     @Test
@@ -143,7 +152,7 @@ class DeliveryLifecycleServiceIntegrationTest {
         assertThat(delivery.getDriverId()).isEqualTo(fx.driverId());
         assertThat(driver.isAvailable()).isTrue();
         assertThat(outboxEventRepository.findAll().stream()
-                .anyMatch(e -> "delivery.failed".equals(e.getEventType()))).isTrue();
+                .anyMatch(e -> "DeliveryFailed".equals(e.getEventType()))).isTrue();
     }
 
     @Test
@@ -169,16 +178,16 @@ class DeliveryLifecycleServiceIntegrationTest {
     @Test
     void assignmentRetrySucceedsWhenDriverComesOnline() {
         UUID orderId = UUID.randomUUID();
-        UUID customerId = UUID.randomUUID();
+        DeliveryRequest request = scheduleRequest(orderId, "Addr");
         DeliveryAssignmentService.AssignmentResult pending =
-                assignmentService.scheduleDelivery(orderId, customerId, "Addr");
+                assignmentService.scheduleDelivery(key(orderId), request);
         assertThat(pending.assigned()).isFalse();
         assertThat(pending.deliveryStatus()).isEqualTo(DeliveryStatus.FINDING_DRIVER);
 
         Driver driver = onlineDriver("Late", "0900333444", "59L1-11111", UUID.randomUUID());
         // Re-invoke assignment once a driver is online (same path as retry scheduler).
         DeliveryAssignmentService.AssignmentResult retried =
-                assignmentService.scheduleDelivery(orderId, customerId, "Addr");
+                assignmentService.scheduleDelivery(key(orderId), request);
 
         assertThat(retried.assigned()).isTrue();
         Delivery delivery = deliveryRepository.findById(pending.deliveryId()).orElseThrow();
@@ -190,10 +199,27 @@ class DeliveryLifecycleServiceIntegrationTest {
     private Fixture assignedDelivery() {
         UUID userId = UUID.randomUUID();
         Driver driver = onlineDriver("Main", "0900123456", "59A1-12345", userId);
+        UUID orderId = UUID.randomUUID();
         DeliveryAssignmentService.AssignmentResult result =
-                assignmentService.scheduleDelivery(UUID.randomUUID(), UUID.randomUUID(), "Pickup road");
+                assignmentService.scheduleDelivery(key(orderId), scheduleRequest(orderId, "Pickup road"));
         assertThat(result.assigned()).isTrue();
         return new Fixture(result.deliveryId(), driver.getId(), userId);
+    }
+
+    private DeliveryRequest scheduleRequest(UUID orderId, String dropoffLine) {
+        UUID restaurantId = UUID.randomUUID();
+        return new DeliveryRequest(
+                orderId,
+                UUID.randomUUID(),
+                restaurantId,
+                new DeliveryRequest.PickupAddressSnapshot(
+                        restaurantId, "Restaurant", "0901000000", "12 Le Loi", null, null),
+                new DeliveryRequest.DropoffAddressSnapshot(
+                        dropoffLine, "District 1", "HCM", null, null));
+    }
+
+    private static String key(UUID orderId) {
+        return "delivery-schedule:" + orderId;
     }
 
     private Driver onlineDriver(String name, String phone, String plate, UUID userId) {

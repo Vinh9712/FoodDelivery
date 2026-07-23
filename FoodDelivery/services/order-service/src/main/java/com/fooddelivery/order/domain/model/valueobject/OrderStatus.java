@@ -5,11 +5,13 @@ package com.fooddelivery.order.domain.model.valueobject;
  */
 public enum OrderStatus {
     PENDING,
+    PAID,
     CONFIRMED,
     PREPARING,
     READY_FOR_PICKUP,
     PICKED_UP,
     DELIVERING,
     DELIVERED,
+    CANCELLATION_PENDING,
     CANCELLED
 }

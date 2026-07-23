@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -121,7 +122,7 @@ public class RestaurantServiceImpl implements RestaurantService {
         RestaurantStatus status = null;
         if (request.getStatus() != null) {
             try {
-                status = RestaurantStatus.valueOf(request.getStatus().toUpperCase());
+                status = RestaurantStatus.valueOf(request.getStatus().toUpperCase(Locale.ROOT));
             } catch (IllegalArgumentException e) {
                 // Invalid status, ignore
             }
@@ -137,6 +138,33 @@ public class RestaurantServiceImpl implements RestaurantService {
         );
 
         return page.map(this::mapToResponse);
+    }
+
+    @Override
+    public RestaurantResponse setAvailability(UUID id, boolean accepting) {
+        Restaurant restaurant = findRestaurant(id);
+        restaurant.setAcceptingOrders(accepting);
+        return mapToResponse(restaurantRepository.save(restaurant));
+    }
+
+    @Override
+    public RestaurantResponse changeStatus(UUID id, RestaurantStatus status) {
+        Restaurant restaurant = findRestaurant(id);
+        restaurant.changeStatus(status);
+        return mapToResponse(restaurantRepository.save(restaurant));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isOwner(UUID restaurantId, UUID userId) {
+        return restaurantRepository.findById(restaurantId)
+                .map(restaurant -> java.util.Objects.equals(restaurant.getOwnerId(), userId))
+                .orElseThrow(() -> new RestaurantNotFoundException("Restaurant not found with ID: " + restaurantId));
+    }
+
+    private Restaurant findRestaurant(UUID id) {
+        return restaurantRepository.findById(id)
+                .orElseThrow(() -> new RestaurantNotFoundException("Restaurant not found with ID: " + id));
     }
 
     private RestaurantResponse mapToResponse(Restaurant restaurant) {

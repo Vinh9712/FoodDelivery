@@ -1,5 +1,8 @@
 package com.fooddelivery.order.application.outbox;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fooddelivery.commonevents.IntegrationEventEnvelope;
 import com.fooddelivery.order.domain.model.OutboxEvent;
 import com.fooddelivery.order.infrastructure.repository.OutboxEventRepository;
 import org.slf4j.Logger;
@@ -12,8 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -27,15 +28,19 @@ public class OrderOutboxPublisher {
     private final OutboxEventRepository outboxEventRepository;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final OrderOutboxTopicMapper topicMapper;
+    private final ObjectMapper objectMapper;
     private final Duration sendTimeout;
     private final Duration retryBaseDelay;
     private final Duration retryMaxDelay;
     private final int maxAttempts;
+    private final OrderOutboxMetrics metrics;
 
     public OrderOutboxPublisher(
             OutboxEventRepository outboxEventRepository,
             KafkaTemplate<String, Object> kafkaTemplate,
             OrderOutboxTopicMapper topicMapper,
+            ObjectMapper objectMapper,
+            org.springframework.beans.factory.ObjectProvider<OrderOutboxMetrics> metrics,
             @Value("${app.order.outbox.relay.send-timeout:5s}") Duration sendTimeout,
             @Value("${app.order.outbox.relay.retry-base-delay:5s}") Duration retryBaseDelay,
             @Value("${app.order.outbox.relay.retry-max-delay:5m}") Duration retryMaxDelay,
@@ -43,6 +48,8 @@ public class OrderOutboxPublisher {
         this.outboxEventRepository = outboxEventRepository;
         this.kafkaTemplate = kafkaTemplate;
         this.topicMapper = topicMapper;
+        this.objectMapper = objectMapper;
+        this.metrics = metrics.getIfAvailable();
         this.sendTimeout = sendTimeout;
         this.retryBaseDelay = retryBaseDelay;
         this.retryMaxDelay = retryMaxDelay;
@@ -58,14 +65,22 @@ public class OrderOutboxPublisher {
         }
 
         try {
-            Map<String, Object> envelope = new LinkedHashMap<>();
-            envelope.put("eventId", event.getId().toString());
-            envelope.put("eventType", event.getEventType());
-            envelope.put("timestamp", event.getCreatedAt().toString());
-            envelope.put("payload", event.getPayload());
+            JsonNode payload = objectMapper.valueToTree(event.getPayload());
+            IntegrationEventEnvelope<JsonNode> envelope = new IntegrationEventEnvelope<>(
+                    event.getId(),
+                    event.getEventType(),
+                    event.getEventVersion(),
+                    event.getCreatedAt(),
+                    event.getAggregateType(),
+                    event.getAggregateId(),
+                    event.getAggregateSequence(),
+                    payload);
 
             String topic = topicMapper.topicFor(event.getEventType());
-            kafkaTemplate.send(topic, event.getAggregateId().toString(), envelope)
+            String key = event.getPartitionKey() != null
+                    ? event.getPartitionKey()
+                    : event.getAggregateId().toString();
+            kafkaTemplate.send(topic, key, envelope)
                     .get(sendTimeout.toMillis(), TimeUnit.MILLISECONDS);
             event.markPublished();
             log.info("Published order outbox event {} ({})", event.getId(), event.getEventType());
@@ -82,11 +97,17 @@ public class OrderOutboxPublisher {
         int nextAttempt = event.getAttempts() + 1;
         if (nextAttempt >= maxAttempts) {
             event.markDeadLettered(error);
+            if (metrics != null) {
+                metrics.recordDeadLetter();
+            }
             log.error("Order outbox event {} moved to dead letter after {} attempts: {}",
                     event.getId(), nextAttempt, error);
         } else {
             Instant retryAt = now.plus(backoffFor(nextAttempt));
             event.recordFailure(error, retryAt);
+            if (metrics != null) {
+                metrics.recordPublishRetry();
+            }
             log.warn("Order outbox event {} failed; retry {} scheduled at {}: {}",
                     event.getId(), nextAttempt, retryAt, error);
         }

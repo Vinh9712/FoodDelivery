@@ -67,6 +67,7 @@ public class SecurityConfig {
                                 "/api/v1/restaurants/**",
                                 "/api/v1/items/**",
                                 "/api/v1/categories/**").hasAnyRole("RESTAURANT_OWNER", "ADMIN")
+                        .pathMatchers("/api/v1/restaurant-orders/**").hasAnyRole("RESTAURANT_OWNER", "ADMIN")
                         .pathMatchers(HttpMethod.POST, "/api/v1/orders/**").hasRole("CUSTOMER")
                         .pathMatchers(HttpMethod.POST, "/api/v1/deliveries/*/assign-driver/*").hasRole("ADMIN")
                         .anyExchange().authenticated())

@@ -21,6 +21,7 @@ import org.springframework.data.domain.Pageable;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -266,5 +267,52 @@ class RestaurantServiceImplTest {
                 isNull(),
                 isNull(),
                 any(Pageable.class));
+    }
+
+    @Test
+    void searchRestaurants_ShouldParseStatusIndependentlyOfDefaultLocale() {
+        Locale previousLocale = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+            RestaurantSearchRequest searchRequest = RestaurantSearchRequest.builder()
+                    .status("inactive")
+                    .page(0)
+                    .size(10)
+                    .build();
+            Pageable pageable = PageRequest.of(0, 10);
+            when(restaurantRepository.searchRestaurants(
+                    isNull(),
+                    isNull(),
+                    isNull(),
+                    eq(RestaurantStatus.INACTIVE),
+                    isNull(),
+                    any(Pageable.class)))
+                    .thenReturn(Page.empty(pageable));
+
+            Page<RestaurantResponse> responses = restaurantService.searchRestaurants(searchRequest);
+
+            assertTrue(responses.isEmpty());
+            verify(restaurantRepository).searchRestaurants(
+                    isNull(),
+                    isNull(),
+                    isNull(),
+                    eq(RestaurantStatus.INACTIVE),
+                    isNull(),
+                    any(Pageable.class));
+        } finally {
+            Locale.setDefault(previousLocale);
+        }
+    }
+
+    @Test
+    void isOwnerLoadsRestaurantOnceAndComparesStoredOwner() {
+        when(restaurantRepository.findById(restaurantId)).thenReturn(Optional.of(restaurant));
+
+        assertTrue(restaurantService.isOwner(restaurantId, ownerId));
+        assertFalse(restaurantService.isOwner(restaurantId, UUID.randomUUID()));
+
+        verify(restaurantRepository, times(2)).findById(restaurantId);
+        verify(restaurantRepository, never()).existsById(any());
+        verify(restaurantRepository, never()).existsByIdAndOwnerId(any(), any());
     }
 }

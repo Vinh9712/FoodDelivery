@@ -1,5 +1,7 @@
 package com.fooddelivery.payment.application.outbox;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fooddelivery.commonevents.IntegrationEventEnvelope;
 import com.fooddelivery.payment.infrastructure.persistence.OutboxEvent;
 import com.fooddelivery.payment.infrastructure.repository.OutboxEventRepository;
 import org.slf4j.Logger;
@@ -12,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -25,6 +26,7 @@ public class PaymentOutboxPublisher {
 
     private final OutboxEventRepository outboxEventRepository;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final PaymentOutboxTopicMapper topicMapper;
     private final Duration sendTimeout;
     private final Duration retryBaseDelay;
     private final Duration retryMaxDelay;
@@ -33,12 +35,14 @@ public class PaymentOutboxPublisher {
     public PaymentOutboxPublisher(
             OutboxEventRepository outboxEventRepository,
             KafkaTemplate<String, Object> kafkaTemplate,
+            PaymentOutboxTopicMapper topicMapper,
             @Value("${app.payment.outbox.relay.send-timeout:5s}") Duration sendTimeout,
             @Value("${app.payment.outbox.relay.retry-base-delay:5s}") Duration retryBaseDelay,
             @Value("${app.payment.outbox.relay.retry-max-delay:5m}") Duration retryMaxDelay,
             @Value("${app.payment.outbox.relay.max-attempts:10}") int maxAttempts) {
         this.outboxEventRepository = outboxEventRepository;
         this.kafkaTemplate = kafkaTemplate;
+        this.topicMapper = topicMapper;
         this.sendTimeout = sendTimeout;
         this.retryBaseDelay = retryBaseDelay;
         this.retryMaxDelay = retryMaxDelay;
@@ -54,13 +58,21 @@ public class PaymentOutboxPublisher {
         }
 
         try {
-            Map<String, Object> envelope = Map.of(
-                    "eventId", event.getId().toString(),
-                    "eventType", event.getEventType(),
-                    "timestamp", event.getOccurredAt().toString(),
-                    "payload", event.getPayload());
+            IntegrationEventEnvelope<JsonNode> envelope = new IntegrationEventEnvelope<>(
+                    event.getId(),
+                    event.getEventType(),
+                    event.getEventVersion(),
+                    event.getOccurredAt(),
+                    event.getAggregateType(),
+                    event.getAggregateId(),
+                    event.getAggregateSequence(),
+                    event.getPayload());
 
-            kafkaTemplate.send(topicFor(event.getEventType()), event.getAggregateId().toString(), envelope)
+            String topic = topicMapper.topicFor(event.getEventType());
+            String key = event.getPartitionKey() != null
+                    ? event.getPartitionKey()
+                    : event.getAggregateId().toString();
+            kafkaTemplate.send(topic, key, envelope)
                     .get(sendTimeout.toMillis(), TimeUnit.MILLISECONDS);
             event.markPublished();
             log.info("Published payment outbox event {} ({})", event.getId(), event.getEventType());
@@ -85,15 +97,6 @@ public class PaymentOutboxPublisher {
             log.warn("Payment outbox event {} failed; retry {} scheduled at {}: {}",
                     event.getId(), nextAttempt, retryAt, error);
         }
-    }
-
-    private String topicFor(String eventType) {
-        return switch (eventType) {
-            case "PaymentSucceeded" -> "payment.processed";
-            case "PaymentFailed" -> "payment.failed";
-            case "PaymentRefunded" -> "payment.refunded";
-            default -> throw new IllegalArgumentException("Unsupported payment event type: " + eventType);
-        };
     }
 
     private Duration backoffFor(int attempt) {

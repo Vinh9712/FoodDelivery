@@ -24,6 +24,8 @@ logging:
     com.fooddelivery.restaurant: ${RESTAURANT_LOG_LEVEL:INFO}
 
 app:
+  restaurant:
+    business-zone: ${RESTAURANT_BUSINESS_ZONE:Asia/Ho_Chi_Minh}
   security:
     public-get-paths:
       - /api/v1/restaurants/**

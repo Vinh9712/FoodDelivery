@@ -10,6 +10,8 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+import com.fooddelivery.restaurant.domain.exception.InvalidRestaurantStateException;
+
 @Entity
 @Table(name = "restaurants")
 @Getter
@@ -87,13 +89,63 @@ public class Restaurant {
     @Column(name = "updated_by")
     private UUID updatedBy;
 
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
     @PrePersist
     protected void onCreate() {
         if (avgRating == null) avgRating = BigDecimal.ZERO;
         if (totalReviews == null) totalReviews = 0;
         if (minOrderAmount == null) minOrderAmount = BigDecimal.ZERO;
         if (estimatedDeliveryTimeMin == null) estimatedDeliveryTimeMin = 30;
-        if (isAcceptingOrders == null) isAcceptingOrders = true;
+        if (isAcceptingOrders == null) isAcceptingOrders = false;
         if (status == null) status = RestaurantStatus.PENDING;
+    }
+
+    public boolean canAcceptOrders(LocalTime now) {
+        if (status != RestaurantStatus.ACTIVE || !Boolean.TRUE.equals(isAcceptingOrders)
+                || openTime == null || closeTime == null || now == null) {
+            return false;
+        }
+        if (openTime.equals(closeTime)) {
+            return true;
+        }
+        if (openTime.isBefore(closeTime)) {
+            return !now.isBefore(openTime) && now.isBefore(closeTime);
+        }
+        return !now.isBefore(openTime) || now.isBefore(closeTime);
+    }
+
+    public void setAcceptingOrders(boolean accepting) {
+        if (accepting && status != RestaurantStatus.ACTIVE) {
+            throw new InvalidRestaurantStateException("Only ACTIVE restaurants can accept orders");
+        }
+        this.isAcceptingOrders = accepting;
+    }
+
+    public void changeStatus(RestaurantStatus next) {
+        if (next == null) {
+            throw new InvalidRestaurantStateException("status is required");
+        }
+        if (next == status) {
+            return;
+        }
+        boolean allowed = (next == RestaurantStatus.SUSPENDED && status != RestaurantStatus.SUSPENDED)
+                || (status == RestaurantStatus.SUSPENDED && next == RestaurantStatus.INACTIVE)
+                || (next == RestaurantStatus.ACTIVE
+                && (status == RestaurantStatus.PENDING || status == RestaurantStatus.INACTIVE))
+                || (status == RestaurantStatus.ACTIVE && next == RestaurantStatus.INACTIVE);
+        if (!allowed) {
+            throw new InvalidRestaurantStateException(
+                    "Invalid restaurant status transition: " + status + " -> " + next);
+        }
+        if (next == RestaurantStatus.ACTIVE && (openTime == null || closeTime == null)) {
+            throw new InvalidRestaurantStateException("Business hours are required before activation");
+        }
+        this.status = next;
+        if (next != RestaurantStatus.ACTIVE) {
+            this.isAcceptingOrders = false;
+        }
     }
 }

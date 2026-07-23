@@ -12,6 +12,10 @@
 #   8084 delivery      8085 payment    8086 notification 8087 authentication
 #   8761 eureka        8888 config-server
 #   5432 postgres      9092 kafka      8090 kafka-ui      8180 optional legacy keycloak
+#
+# Kafka family topics (auto-created by brokers / first producer):
+#   order.events.v1   delivery.events.v1   payment.events.v1
+# Coordinated cutover: deploy order + delivery publishers/consumers together on v1 topics.
 # =====================================================================
 
 name: fooddelivery

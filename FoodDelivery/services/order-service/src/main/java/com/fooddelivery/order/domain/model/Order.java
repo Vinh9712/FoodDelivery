@@ -1,5 +1,6 @@
 package com.fooddelivery.order.domain.model;
 
+import com.fooddelivery.commonevents.order.OrderEventPayloads;
 import com.fooddelivery.order.domain.exception.InvalidOrderStateException;
 import com.fooddelivery.order.domain.model.valueobject.*;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
@@ -10,6 +11,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Type;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 
@@ -26,8 +28,10 @@ import com.fooddelivery.order.domain.util.UuidCreator;
  * <h3>State Machine:</h3>
  * <pre>
  *   PENDING → PAID → CONFIRMED → PREPARING → READY_FOR_PICKUP → PICKED_UP → DELIVERING → DELIVERED
- *       │        │
- *       └→ CANCELLED ←┘  (chỉ hủy từ PENDING hoặc PAID)
+ *      │       │         │                        │               │            │
+ *      │       └→ CANCELLATION_PENDING ←──────────┴───────────────┴────────────┘
+ *      │                    │
+ *      └→ CANCELLED ←───────┘  (payment fail, or refund confirmed)
  * </pre>
  */
 @Entity
@@ -85,6 +89,52 @@ public class Order {
     @Column(name = "payment_status", nullable = false, length = 30)
     private PaymentStatus paymentStatus;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "refund_status", nullable = false, length = 30)
+    private RefundStatus refundStatus;
+
+    @Column(name = "paid_at")
+    private Instant paidAt;
+
+    @Column(name = "restaurant_response_deadline")
+    private Instant restaurantResponseDeadline;
+
+    @Type(JsonType.class)
+    @Column(name = "pickup_address_snapshot", columnDefinition = "jsonb")
+    private PickupAddressSnapshot pickupAddressSnapshot;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "cancellation_code", length = 50)
+    private CancellationCode cancellationCode;
+
+    @Column(name = "cancellation_reason", length = 500)
+    private String cancellationReason;
+
+    @Column(name = "event_sequence", nullable = false)
+    private long eventSequence;
+
+    /** Delivery aggregate id observed via schedule response or reconciliation lookup. */
+    @Column(name = "delivery_id")
+    private UUID deliveryId;
+
+    @Column(name = "delivery_schedule_attempts", nullable = false)
+    private int deliveryScheduleAttempts;
+
+    @Column(name = "next_delivery_schedule_attempt_at")
+    private Instant nextDeliveryScheduleAttemptAt;
+
+    @Column(name = "last_delivery_schedule_error", length = 1000)
+    private String lastDeliveryScheduleError;
+
+    @Column(name = "refund_attempts", nullable = false)
+    private int refundAttempts;
+
+    @Column(name = "next_refund_attempt_at")
+    private Instant nextRefundAttemptAt;
+
+    @Column(name = "last_refund_error", length = 1000)
+    private String lastRefundError;
+
     @Column(name = "promotion_code", length = 50)
     private String promotionCode;
 
@@ -141,6 +191,14 @@ public class Order {
                                String deliveryAddressJson,
                                BigDecimal deliveryFee, BigDecimal discountAmount,
                                String clientRequestId) {
+        return create(customerId, restaurantId, deliveryAddressJson, deliveryFee, discountAmount,
+                clientRequestId, null);
+    }
+
+    public static Order create(UUID customerId, UUID restaurantId,
+                               String deliveryAddressJson,
+                               BigDecimal deliveryFee, BigDecimal discountAmount,
+                               String clientRequestId, PickupAddressSnapshot pickupAddressSnapshot) {
         var order = new Order();
         order.id = UuidCreator.nextUuidV7();
         order.customerId = Objects.requireNonNull(customerId, "customerId must not be null");
@@ -160,6 +218,13 @@ public class Order {
         order.subtotal = BigDecimal.ZERO;
         order.totalAmount = BigDecimal.ZERO;
         order.paymentStatus = PaymentStatus.PENDING;
+        order.refundStatus = RefundStatus.NOT_REQUIRED;
+        order.deliveryScheduleAttempts = 0;
+        order.refundAttempts = 0;
+        order.pickupAddressSnapshot = pickupAddressSnapshot;
+        if (pickupAddressSnapshot != null && !restaurantId.equals(pickupAddressSnapshot.restaurantId())) {
+            throw new IllegalArgumentException("pickup snapshot restaurantId must match order restaurantId");
+        }
         order.createdAt = Instant.now();
         order.updatedAt = order.createdAt;
 
@@ -199,6 +264,9 @@ public class Order {
         order.promotionCode = promotionCode;
         order.note = note;
         order.paymentStatus = PaymentStatus.PENDING;
+        order.refundStatus = RefundStatus.NOT_REQUIRED;
+        order.deliveryScheduleAttempts = 0;
+        order.refundAttempts = 0;
 
         BigDecimal sub = BigDecimal.ZERO;
         for (OrderItem item : items) {
@@ -229,6 +297,9 @@ public class Order {
         this.deliveryFee = BigDecimal.ZERO;
         this.discountAmount = BigDecimal.ZERO;
         this.paymentStatus = PaymentStatus.PENDING;
+        this.refundStatus = RefundStatus.NOT_REQUIRED;
+        this.deliveryScheduleAttempts = 0;
+        this.refundAttempts = 0;
         this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
     }
@@ -261,13 +332,228 @@ public class Order {
         this.updatedAt = Instant.now();
     }
 
-    public void markAsPaid() {
-        if (this.status != OrderStatus.PENDING) {
-            throw new IllegalStateException(
-                    "Chỉ đơn hàng PENDING mới có thể chuyển sang CONFIRMED. Trạng thái hiện tại: " + this.status);
+    public void markPaid(Instant paidAt, Duration restaurantAcceptanceTimeout) {
+        Objects.requireNonNull(paidAt, "paidAt is required");
+        Objects.requireNonNull(restaurantAcceptanceTimeout, "restaurantAcceptanceTimeout is required");
+        if (restaurantAcceptanceTimeout.isNegative()) {
+            throw new IllegalArgumentException("restaurantAcceptanceTimeout must not be negative");
+        }
+        if (!forwardTransition(OrderStatus.PENDING, OrderStatus.PAID, "Payment captured", null,
+                paidAt, OrderEventPayloads.Source.PAYMENT_RECONCILIATION)) {
+            return;
         }
         this.paymentStatus = PaymentStatus.PAID;
-        transitionWithOutbox(OrderStatus.PENDING, OrderStatus.CONFIRMED, "Thanh toán thành công", null);
+        this.paidAt = paidAt;
+        this.restaurantResponseDeadline = paidAt.plus(restaurantAcceptanceTimeout);
+    }
+
+    /** @deprecated use {@link #markPaid(Instant, Duration)} with an explicit clock. */
+    @Deprecated
+    public void markAsPaid() {
+        markPaid(Instant.now(), Duration.ofMinutes(10));
+    }
+
+    public void markPaymentFailed(String reason, Instant failedAt) {
+        Objects.requireNonNull(failedAt, "failedAt is required");
+        String normalizedReason = normalizedReason(reason);
+        if (status != OrderStatus.PENDING) {
+            throw new InvalidOrderStateException("Payment failure is only valid for PENDING orders; was " + status);
+        }
+        if (!forwardTransition(OrderStatus.PENDING, OrderStatus.CANCELLED, normalizedReason, null,
+                failedAt, OrderEventPayloads.Source.PAYMENT_RECONCILIATION)) {
+            return;
+        }
+        this.paymentStatus = PaymentStatus.FAILED;
+        this.refundStatus = RefundStatus.NOT_REQUIRED;
+        this.cancellationReason = normalizedReason;
+        registerCancellationEvent(failedAt);
+    }
+
+    public void acceptByRestaurant(UUID acceptedBy) {
+        forwardTransition(OrderStatus.PAID, OrderStatus.CONFIRMED, "Restaurant accepted order", acceptedBy,
+                Instant.now(), OrderEventPayloads.Source.RESTAURANT);
+    }
+
+    public void startPreparing(UUID changedBy) {
+        forwardTransition(OrderStatus.CONFIRMED, OrderStatus.PREPARING, "Restaurant started preparing", changedBy,
+                Instant.now(), OrderEventPayloads.Source.RESTAURANT);
+    }
+
+    public void markReadyForPickup(UUID changedBy) {
+        forwardTransition(OrderStatus.PREPARING, OrderStatus.READY_FOR_PICKUP, "Order ready for pickup", changedBy,
+                Instant.now(), OrderEventPayloads.Source.RESTAURANT);
+    }
+
+    public void markPickedUp(Instant pickedUpAt, OrderEventPayloads.Source source) {
+        requireDeliverySource(source);
+        forwardTransition(OrderStatus.READY_FOR_PICKUP, OrderStatus.PICKED_UP, "Order picked up", null,
+                Objects.requireNonNull(pickedUpAt, "pickedUpAt is required"), source);
+    }
+
+    public void markDelivering(Instant deliveryStartedAt, OrderEventPayloads.Source source) {
+        requireDeliverySource(source);
+        forwardTransition(OrderStatus.PICKED_UP, OrderStatus.DELIVERING, "Order delivering", null,
+                Objects.requireNonNull(deliveryStartedAt, "deliveryStartedAt is required"), source);
+    }
+
+    public void markDelivered(Instant deliveredAt, OrderEventPayloads.Source source) {
+        requireDeliverySource(source);
+        forwardTransition(OrderStatus.DELIVERING, OrderStatus.DELIVERED, "Order delivered", null,
+                Objects.requireNonNull(deliveredAt, "deliveredAt is required"), source);
+    }
+
+    public void requestCancellation(String reason, CancellationCode code, OrderEventPayloads.Source source) {
+        beginCompensation(reason, code, source, Instant.now());
+    }
+
+    /**
+     * Eligibility for restaurant acceptance timeout: still {@code PAID} and deadline has elapsed.
+     * Does not mutate state — caller must invoke compensation when this returns true.
+     * Uses {@code deadline <= now} (deadline equal to now is overdue).
+     */
+    public boolean requestCancellationIfRestaurantTimedOut(Instant now) {
+        Objects.requireNonNull(now, "now is required");
+        return status == OrderStatus.PAID
+                && restaurantResponseDeadline != null
+                && !now.isBefore(restaurantResponseDeadline);
+    }
+
+    public void markRefundSucceeded(Instant refundedAt) {
+        confirmRefund(null, null, null, refundedAt);
+    }
+
+    /**
+     * Confirms a completed remote refund. Idempotent for already-cancelled/refunded orders.
+     * Emits {@code OrderRefundStatusChanged} then {@code OrderCancelled} once.
+     */
+    public void confirmRefund(UUID paymentId, UUID refundId, BigDecimal amount, Instant refundedAt) {
+        Objects.requireNonNull(refundedAt, "refundedAt is required");
+        if (status == OrderStatus.CANCELLED
+                && paymentStatus == PaymentStatus.REFUNDED
+                && refundStatus == RefundStatus.SUCCEEDED) {
+            return;
+        }
+        if (status != OrderStatus.CANCELLATION_PENDING && status != OrderStatus.CANCELLED) {
+            throw new InvalidOrderStateException(
+                    "Refund confirmation requires CANCELLATION_PENDING; was " + status);
+        }
+        RefundStatus fromRefund = this.refundStatus;
+        if (fromRefund != RefundStatus.SUCCEEDED) {
+            this.refundStatus = RefundStatus.SUCCEEDED;
+            registerOutboxEvent("OrderRefundStatusChanged", Map.of(
+                    "orderId", this.id.toString(),
+                    "customerId", this.customerId.toString(),
+                    "fromRefundStatus", fromRefund.name(),
+                    "toRefundStatus", RefundStatus.SUCCEEDED.name(),
+                    "reason", cancellationReason != null ? cancellationReason : "Refund confirmed",
+                    "changedAt", refundedAt.toString()));
+        }
+        this.paymentStatus = PaymentStatus.REFUNDED;
+        this.nextRefundAttemptAt = null;
+        this.lastRefundError = null;
+        if (status == OrderStatus.CANCELLATION_PENDING) {
+            if (!forwardTransition(OrderStatus.CANCELLATION_PENDING, OrderStatus.CANCELLED, "Refund succeeded", null,
+                    refundedAt, OrderEventPayloads.Source.COMPENSATION)) {
+                return;
+            }
+            registerCancellationEvent(refundedAt);
+        }
+    }
+
+    /**
+     * Attach observed delivery id without changing fulfillment status.
+     * Clears schedule-retry metadata after positive remote observation.
+     */
+    public void attachDelivery(UUID observedDeliveryId) {
+        this.deliveryId = Objects.requireNonNull(observedDeliveryId, "deliveryId is required");
+        clearDeliveryScheduleRetryMetadata();
+        this.updatedAt = Instant.now();
+    }
+
+    public void recordDeliveryScheduleFailure(String error, Instant nextAttemptAt, Instant failedAt) {
+        this.deliveryScheduleAttempts++;
+        this.lastDeliveryScheduleError = truncateError(error);
+        this.nextDeliveryScheduleAttemptAt = Objects.requireNonNull(nextAttemptAt, "nextAttemptAt is required");
+        this.updatedAt = Objects.requireNonNull(failedAt, "failedAt is required");
+    }
+
+    public void clearDeliveryScheduleRetryMetadata() {
+        this.deliveryScheduleAttempts = 0;
+        this.nextDeliveryScheduleAttemptAt = null;
+        this.lastDeliveryScheduleError = null;
+    }
+
+    public void scheduleFirstRefundAttempt(Instant nextAttemptAt) {
+        this.refundAttempts = 0;
+        this.nextRefundAttemptAt = Objects.requireNonNull(nextAttemptAt, "nextAttemptAt is required");
+        this.lastRefundError = null;
+    }
+
+    public void recordRefundAttemptFailure(String error, Instant nextAttemptAt, Instant failedAt) {
+        this.refundAttempts++;
+        this.lastRefundError = truncateError(error);
+        this.nextRefundAttemptAt = nextAttemptAt;
+        this.updatedAt = Objects.requireNonNull(failedAt, "failedAt is required");
+    }
+
+    public void markRefundManualReview(String reason, Instant changedAt) {
+        if (this.refundStatus == RefundStatus.MANUAL_REVIEW) {
+            return;
+        }
+        if (this.refundStatus != RefundStatus.PENDING) {
+            throw new InvalidOrderStateException(
+                    "Manual review is only valid from PENDING refund status; was " + this.refundStatus);
+        }
+        this.refundStatus = RefundStatus.MANUAL_REVIEW;
+        this.nextRefundAttemptAt = null;
+        this.lastRefundError = truncateError(reason);
+        this.updatedAt = Objects.requireNonNull(changedAt, "changedAt is required");
+        registerOutboxEvent("OrderRefundStatusChanged", Map.of(
+                "orderId", this.id.toString(),
+                "customerId", this.customerId.toString(),
+                "fromRefundStatus", RefundStatus.PENDING.name(),
+                "toRefundStatus", RefundStatus.MANUAL_REVIEW.name(),
+                "reason", reason != null ? reason : "Refund retry exhausted",
+                "changedAt", changedAt.toString()));
+    }
+
+    /**
+     * Begins compensation: CANCELLATION_PENDING + RefundStatus.PENDING.
+     * Never sets PaymentStatus.REFUNDED. Idempotent when already pending.
+     */
+    public void beginCompensation(String reason, CancellationCode code, OrderEventPayloads.Source source,
+                                  Instant changedAt) {
+        Objects.requireNonNull(changedAt, "changedAt is required");
+        if (status == OrderStatus.CANCELLATION_PENDING) {
+            return;
+        }
+        if (status == OrderStatus.CANCELLED) {
+            return;
+        }
+        String normalizedReason = normalizedReason(reason);
+        Objects.requireNonNull(code, "cancellationCode is required");
+        requireCancellationSource(code, source);
+        if (!isCancellationAllowed(status, code)) {
+            throw new InvalidOrderStateException(
+                    "Cannot request cancellation with code " + code + " in status: " + status);
+        }
+        OrderStatus from = this.status;
+        if (!forwardTransition(from, OrderStatus.CANCELLATION_PENDING, normalizedReason, null, changedAt, source)) {
+            return;
+        }
+        this.cancellationCode = code;
+        this.cancellationReason = normalizedReason;
+        RefundStatus fromRefund = this.refundStatus;
+        this.refundStatus = RefundStatus.PENDING;
+        if (fromRefund != RefundStatus.PENDING) {
+            registerOutboxEvent("OrderRefundStatusChanged", Map.of(
+                    "orderId", this.id.toString(),
+                    "customerId", this.customerId.toString(),
+                    "fromRefundStatus", fromRefund.name(),
+                    "toRefundStatus", RefundStatus.PENDING.name(),
+                    "reason", normalizedReason,
+                    "changedAt", changedAt.toString()));
+        }
     }
 
 
@@ -280,14 +566,12 @@ public class Order {
             throw new IllegalStateException(
                     "Không thể gán tài xế cho đơn hàng đã hoàn thành/hủy. Trạng thái: " + this.status);
         }
-        this.driverId = Objects.requireNonNull(driverId, "driverId must not be null");
+        UUID requiredDriverId = Objects.requireNonNull(driverId, "driverId must not be null");
+        if (requiredDriverId.equals(this.driverId)) {
+            return;
+        }
+        this.driverId = requiredDriverId;
         this.updatedAt = Instant.now();
-
-        // Ghi outbox event
-        registerOutboxEvent("DriverAssigned", Map.of(
-                "orderId", this.id.toString(),
-                "driverId", driverId.toString()
-        ));
     }
 
     public void assignDriver(AssignedDriverInfo driverInfo) {
@@ -298,8 +582,12 @@ public class Order {
         if (this.status == OrderStatus.DELIVERED || this.status == OrderStatus.CANCELLED) {
             return;
         }
-        this.assignedDriverSnapshot = Objects.requireNonNull(driverInfo, "driverInfo must not be null");
-        this.driverId = driverInfo.driverId();
+        AssignedDriverInfo requiredDriverInfo = Objects.requireNonNull(driverInfo, "driverInfo must not be null");
+        if (requiredDriverInfo.equals(this.assignedDriverSnapshot)) {
+            return;
+        }
+        this.assignedDriverSnapshot = requiredDriverInfo;
+        this.driverId = requiredDriverInfo.driverId();
         this.updatedAt = Instant.now();
     }
 
@@ -314,35 +602,22 @@ public class Order {
      * @throws IllegalStateException nếu đơn hàng không thể hủy
      */
     public void cancel(String reason) {
-        if (this.status != OrderStatus.PENDING && this.status != OrderStatus.CONFIRMED) {
-            throw new IllegalStateException(
-                    "Chỉ hủy đơn hàng ở trạng thái PENDING hoặc CONFIRMED. Trạng thái hiện tại: " + this.status);
-        }
-        OrderStatus from = this.status;
-        this.status = OrderStatus.CANCELLED;
-        this.statusHistory.add(
-                OrderStatusHistory.of(this.id, from, OrderStatus.CANCELLED, reason, null));
-        this.updatedAt = Instant.now();
-
-        // Ghi outbox event
-        registerOutboxEvent("OrderCancelled", Map.of(
-                "orderId", this.id.toString(),
-                "reason", reason != null ? reason : "Không rõ lý do",
-                "fromStatus", from.name()
-        ));
+        cancel(reason, null);
     }
 
     /**
      * Hủy đơn hàng với lý do và người hủy (backward compatible).
      */
     public void cancel(String reason, UUID cancelledBy) {
-        if (this.status == OrderStatus.DELIVERED || this.status == OrderStatus.CANCELLED) {
-            throw new InvalidOrderStateException("Cannot cancel order in status: " + this.status);
+        if (this.status == OrderStatus.PENDING) {
+            markPaymentFailed(reason, Instant.now());
+            return;
         }
-        OrderStatus from = this.status;
-        this.status = OrderStatus.CANCELLED;
-        statusHistory.add(OrderStatusHistory.of(this.id, from, OrderStatus.CANCELLED, reason, cancelledBy));
-        this.updatedAt = Instant.now();
+        if (status == OrderStatus.PAID || status == OrderStatus.CONFIRMED) {
+            requestCancellation(reason, CancellationCode.RESTAURANT_REJECTED, OrderEventPayloads.Source.RESTAURANT);
+            return;
+        }
+        requestCancellation(reason, CancellationCode.DELIVERY_FAILED, OrderEventPayloads.Source.DELIVERY_EVENT);
     }
 
     public void cancel() {
@@ -352,34 +627,35 @@ public class Order {
     // ── Các transition lifecycle khác (backward compatible) ──
 
     public void confirm() {
-        transition(OrderStatus.PENDING, OrderStatus.CONFIRMED, "Order confirmed", null);
+        acceptByRestaurant(null);
     }
 
     public void startPreparing() {
-        transition(OrderStatus.CONFIRMED, OrderStatus.PREPARING, "Start preparing food", null);
+        startPreparing(null);
     }
 
     public void markReady() {
-        transition(OrderStatus.PREPARING, OrderStatus.READY_FOR_PICKUP, "Food is ready for pick up", null);
+        markReadyForPickup(null);
     }
 
     public void pickUp() {
-        transition(OrderStatus.READY_FOR_PICKUP, OrderStatus.PICKED_UP, "Driver picked up food", null);
+        markPickedUp(Instant.now(), OrderEventPayloads.Source.DELIVERY_EVENT);
     }
 
     public void startDelivering() {
-        transition(OrderStatus.PICKED_UP, OrderStatus.DELIVERING, "Order is on the way", null);
+        markDelivering(Instant.now(), OrderEventPayloads.Source.DELIVERY_EVENT);
     }
 
     public void complete() {
-        transition(OrderStatus.DELIVERING, OrderStatus.DELIVERED, "Order delivered successfully", null);
+        markDelivered(Instant.now(), OrderEventPayloads.Source.DELIVERY_EVENT);
     }
 
     public void updatePaymentStatus(PaymentStatus newStatus) {
-        this.paymentStatus = newStatus;
-        if (newStatus == PaymentStatus.FAILED && this.status == OrderStatus.PENDING) {
-            cancel("Payment failed", null);
+        if (newStatus == PaymentStatus.FAILED) {
+            markPaymentFailed("Payment failed", Instant.now());
+            return;
         }
+        this.paymentStatus = Objects.requireNonNull(newStatus, "paymentStatus is required");
         this.updatedAt = Instant.now();
     }
 
@@ -428,32 +704,106 @@ public class Order {
         }
     }
 
-    /** Transition cơ bản (backward compatible) */
-    private void transition(OrderStatus expected, OrderStatus next, String note, UUID changedBy) {
+    private boolean forwardTransition(OrderStatus expected, OrderStatus next, String note, UUID changedBy,
+                                      Instant changedAt, OrderEventPayloads.Source source) {
+        if (this.status == next) {
+            return false;
+        }
         if (this.status != expected) {
             throw new InvalidOrderStateException(
                     "Expected status " + expected + " but was " + this.status);
         }
         statusHistory.add(OrderStatusHistory.of(this.id, expected, next, note, changedBy));
         this.status = next;
-        this.updatedAt = Instant.now();
-    }
-
-    /** Transition kèm ghi outbox event */
-    private void transitionWithOutbox(OrderStatus expected, OrderStatus next,
-                                      String note, UUID changedBy) {
-        transition(expected, next, note, changedBy);
+        this.updatedAt = changedAt;
         registerOutboxEvent("OrderStatusChanged", Map.of(
                 "orderId", this.id.toString(),
+                "customerId", this.customerId.toString(),
+                "restaurantId", this.restaurantId.toString(),
                 "fromStatus", expected.name(),
                 "toStatus", next.name(),
-                "note", note != null ? note : ""
-        ));
+                "source", source.name(),
+                "changedAt", changedAt.toString()));
+        return true;
+    }
+
+    private void registerCancellationEvent(Instant cancelledAt) {
+        registerOutboxEvent("OrderCancelled", Map.of(
+                "orderId", this.id.toString(),
+                "customerId", this.customerId.toString(),
+                "restaurantId", this.restaurantId.toString(),
+                "cancellationCode", cancellationCode == null ? "PAYMENT_FAILED" : cancellationCode.name(),
+                "reason", cancellationReason == null ? "Payment failed" : cancellationReason,
+                "paymentStatus", this.paymentStatus.name(),
+                "refundStatus", this.refundStatus.name(),
+                "cancelledAt", cancelledAt.toString()));
+    }
+
+    private String normalizedReason(String reason) {
+        if (reason == null) {
+            throw new IllegalArgumentException("reason is required");
+        }
+        String trimmed = reason.trim();
+        if (trimmed.isEmpty() || trimmed.length() > 500) {
+            throw new IllegalArgumentException("reason must contain 1 to 500 characters");
+        }
+        return trimmed;
+    }
+
+    private void requireDeliverySource(OrderEventPayloads.Source source) {
+        if (source != OrderEventPayloads.Source.DELIVERY_EVENT
+                && source != OrderEventPayloads.Source.DELIVERY_RECONCILIATION) {
+            throw new IllegalArgumentException("Delivery transitions require a delivery source");
+        }
+    }
+
+    private void requireCancellationSource(CancellationCode code, OrderEventPayloads.Source source) {
+        boolean valid = switch (code) {
+            case RESTAURANT_REJECTED -> source == OrderEventPayloads.Source.RESTAURANT;
+            case RESTAURANT_ACCEPTANCE_TIMEOUT -> source == OrderEventPayloads.Source.SYSTEM_TIMEOUT;
+            case DELIVERY_FAILED -> source == OrderEventPayloads.Source.DELIVERY_EVENT
+                    || source == OrderEventPayloads.Source.DELIVERY_RECONCILIATION;
+        };
+        if (!valid) {
+            throw new IllegalArgumentException("Invalid source for cancellation code: " + code);
+        }
+    }
+
+    /**
+     * Allowed cancel edges from the fulfillment design:
+     * PAID/CONFIRMED for restaurant reject or acceptance timeout (timeout only from PAID);
+     * READY_FOR_PICKUP/PICKED_UP/DELIVERING for delivery failure.
+     */
+    private static boolean isCancellationAllowed(OrderStatus current, CancellationCode code) {
+        return switch (code) {
+            case RESTAURANT_REJECTED -> current == OrderStatus.PAID || current == OrderStatus.CONFIRMED;
+            case RESTAURANT_ACCEPTANCE_TIMEOUT -> current == OrderStatus.PAID;
+            case DELIVERY_FAILED -> current == OrderStatus.READY_FOR_PICKUP
+                    || current == OrderStatus.PICKED_UP
+                    || current == OrderStatus.DELIVERING;
+        };
     }
 
     /** Đăng ký outbox event vào danh sách chờ */
     private void registerOutboxEvent(String eventType, Map<String, Object> payload) {
-        pendingOutboxEvents.add(
-                OutboxEvent.create("Order", this.id, eventType, payload));
+        long sequence = nextEventSequence();
+        pendingOutboxEvents.add(OutboxEvent.create(
+                "Order", this.id, eventType, 1, sequence, this.id.toString(), payload));
+    }
+
+    /**
+     * Allocates the next monotonic outbox sequence for this order aggregate.
+     * Sequence is owned by the aggregate transaction — never by the relay.
+     */
+    private long nextEventSequence() {
+        return ++eventSequence;
+    }
+
+    private static String truncateError(String error) {
+        if (error == null || error.isBlank()) {
+            return "unknown";
+        }
+        String trimmed = error.trim();
+        return trimmed.length() <= 1000 ? trimmed : trimmed.substring(0, 1000);
     }
 }
