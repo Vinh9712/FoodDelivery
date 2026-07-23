@@ -22,7 +22,11 @@ import java.util.UUID;
 public interface NotificationRepository extends JpaRepository<Notification, UUID> {
     Page<Notification> findByUserId(UUID userId, Pageable pageable);
 
+    List<Notification> findByUserIdOrderByCreatedAtDesc(UUID userId);
+
     Page<Notification> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
+
+    long countByUserIdAndIsReadFalse(UUID userId);
 
     @Query("""
             select n from Notification n

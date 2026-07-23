@@ -775,6 +775,7 @@ public class Order {
 
     private void requireCancellationSource(CancellationCode code, OrderEventPayloads.Source source) {
         boolean valid = switch (code) {
+            case CUSTOMER_REQUESTED -> source == OrderEventPayloads.Source.CUSTOMER;
             case RESTAURANT_REJECTED -> source == OrderEventPayloads.Source.RESTAURANT;
             case RESTAURANT_ACCEPTANCE_TIMEOUT -> source == OrderEventPayloads.Source.SYSTEM_TIMEOUT;
             case DELIVERY_FAILED -> source == OrderEventPayloads.Source.DELIVERY_EVENT

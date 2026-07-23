@@ -3,6 +3,7 @@ package com.fooddelivery.order.domain.model;
 import com.fooddelivery.commonevents.order.OrderEventPayloads;
 import com.fooddelivery.order.domain.exception.InvalidOrderStateException;
 import com.fooddelivery.order.domain.model.valueobject.AssignedDriverInfo;
+import com.fooddelivery.order.domain.model.valueobject.CancellationCode;
 import com.fooddelivery.order.domain.model.valueobject.OrderStatus;
 import com.fooddelivery.order.domain.model.valueobject.PaymentStatus;
 import com.fooddelivery.order.domain.model.valueobject.PickupAddressSnapshot;

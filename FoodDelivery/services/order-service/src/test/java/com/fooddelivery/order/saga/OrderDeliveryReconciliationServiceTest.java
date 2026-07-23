@@ -86,7 +86,7 @@ class OrderDeliveryReconciliationServiceTest {
         driverId = UUID.randomUUID();
 
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
-        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(outboxEventRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -206,7 +206,8 @@ class OrderDeliveryReconciliationServiceTest {
                 reasonCaptor.capture(),
                 eq(OrderEventPayloads.Source.DELIVERY_RECONCILIATION));
         assertThat(reasonCaptor.getValue()).contains("no courier");
-        assertThat(order.getDeliveryId()).isEqualTo(deliveryId);
+        assertThat(order.getDeliveryId()).isNull();
+        verify(orderRepository, never()).save(order);
         verify(deliveryClient, never()).schedule(anyString(), any());
     }
 

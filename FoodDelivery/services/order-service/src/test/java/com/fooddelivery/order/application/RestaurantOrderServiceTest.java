@@ -36,6 +36,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -83,20 +84,21 @@ class RestaurantOrderServiceTest {
     void acceptMovesPaidToConfirmedAndPersistsOutbox() {
         Order order = paidOrder();
         when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
-        when(orderRepository.save(order)).thenReturn(order);
+        when(orderRepository.saveAndFlush(order)).thenReturn(order);
 
         Order result = service.accept(order.getId(), ownerId);
 
         assertThat(result.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
-        verify(outboxEventRepository).saveAll(any());
-        verify(orderRepository).save(order);
+        var persistence = inOrder(orderRepository, outboxEventRepository);
+        persistence.verify(orderRepository).saveAndFlush(order);
+        persistence.verify(outboxEventRepository).saveAll(any());
     }
 
     @Test
     void startPreparingMovesConfirmedToPreparing() {
         Order order = confirmedOrder();
         when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
-        when(orderRepository.save(order)).thenReturn(order);
+        when(orderRepository.saveAndFlush(order)).thenReturn(order);
 
         Order result = service.startPreparing(order.getId(), ownerId);
 
@@ -108,7 +110,7 @@ class RestaurantOrderServiceTest {
     void readyPublishesOneApplicationEventAfterStateChange() {
         Order order = preparingOrder();
         when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
-        when(orderRepository.save(order)).thenReturn(order);
+        when(orderRepository.saveAndFlush(order)).thenReturn(order);
 
         Order result = service.markReady(order.getId(), ownerId);
 
@@ -130,7 +132,7 @@ class RestaurantOrderServiceTest {
     void repeatedReadyReturnsCurrentOrderWithoutPublishingAgain() {
         Order order = readyOrder();
         when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
-        when(orderRepository.save(order)).thenReturn(order);
+        when(orderRepository.saveAndFlush(order)).thenReturn(order);
 
         service.markReady(order.getId(), ownerId);
 
@@ -142,7 +144,7 @@ class RestaurantOrderServiceTest {
     void repeatedAcceptIsIdempotentWithoutSecondOutboxBatch() {
         Order order = confirmedOrder();
         when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
-        when(orderRepository.save(order)).thenReturn(order);
+        when(orderRepository.saveAndFlush(order)).thenReturn(order);
 
         Order result = service.accept(order.getId(), ownerId);
 
@@ -249,7 +251,7 @@ class RestaurantOrderServiceTest {
     void readyEventCapturesPickupAndDropoffSnapshots() {
         Order order = preparingOrder();
         when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
-        when(orderRepository.save(order)).thenReturn(order);
+        when(orderRepository.saveAndFlush(order)).thenReturn(order);
 
         service.markReady(order.getId(), ownerId);
 
