@@ -47,10 +47,13 @@ public class UpdateProfileUseCaseImpl implements UpdateProfileUseCase {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public CustomerProfileResponse getProfile(UUID authUserId) {
         Customer customer = customerRepository.findByAuthUserId(authUserId)
-                .orElseThrow(() -> new BusinessRuleException("Customer profile not found"));
+                .orElseGet(() -> {
+                    Customer newCustomer = Customer.create(authUserId, null, "Khách hàng", "0900000000");
+                    return customerRepository.save(newCustomer);
+                });
 
         return new CustomerProfileResponse(
                 customer.getId(),
