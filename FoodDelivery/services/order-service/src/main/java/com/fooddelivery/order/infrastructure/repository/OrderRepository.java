@@ -21,8 +21,13 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     @EntityGraph(attributePaths = {"statusHistory"})
     Optional<Order> findWithHistoryById(UUID id);
 
-    @EntityGraph(attributePaths = {"statusHistory", "items"})
-    Optional<Order> findDetailedById(UUID id);
+    /**
+     * Detail load: fetch items in one query. Do <strong>not</strong> also entity-graph
+     * {@code statusHistory} — Hibernate cannot simultaneously fetch two bags
+     * ({@code MultipleBagFetchException}). History loads lazily (OSIV / batch).
+     */
+    @Query("select distinct o from Order o left join fetch o.items where o.id = :id")
+    Optional<Order> findDetailedById(@Param("id") UUID id);
 
     Optional<Order> findByCustomerIdAndClientRequestId(UUID customerId, String clientRequestId);
 
