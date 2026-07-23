@@ -2,12 +2,11 @@ package com.fooddelivery.customer;
 
 import com.fooddelivery.customer.application.command.AddAddressCommand;
 import com.fooddelivery.customer.application.command.RemoveAddressCommand;
+import com.fooddelivery.customer.application.command.SetDefaultAddressCommand;
 import com.fooddelivery.customer.api.dto.response.AddressResponse;
 import com.fooddelivery.customer.application.usecase.impl.ManageAddressUseCaseImpl;
 import com.fooddelivery.customer.domain.model.Address;
 import com.fooddelivery.customer.domain.model.Customer;
-import com.fooddelivery.customer.domain.model.User;
-import com.fooddelivery.customer.domain.model.enums.UserRole;
 import com.fooddelivery.customer.domain.repository.CustomerRepository;
 import com.github.f4b6a3.uuid.UuidCreator;
 
@@ -41,9 +40,8 @@ class ManageAddressUseCaseTests {
 
     @Test
     void addAddress_ShouldAllowOnlyOneDefaultAddress() {
-        User user = User.register("test@gmail.com", "0987654321", "hashed", UserRole.CUSTOMER);
-        Customer customer = Customer.create(user, "Nguyen Van A", "0987654321");
         UUID userId = UuidCreator.getTimeOrderedEpoch();
+        Customer customer = Customer.create(userId, "Nguyen Van A", "0987654321");
 
         AddAddressCommand cmd1 = new AddAddressCommand(
                 userId,
@@ -56,7 +54,7 @@ class ManageAddressUseCaseTests {
                 true
         );
 
-        when(customerRepository.findByUserId(any())).thenReturn(Optional.of(customer));
+        when(customerRepository.findByAuthUserId(any())).thenReturn(Optional.of(customer));
 
         AddressResponse res1 = useCase.addAddress(cmd1);
         assertTrue(res1.defaultAddress());
@@ -81,16 +79,15 @@ class ManageAddressUseCaseTests {
 
     @Test
     void removeAddress_ShouldSoftDeleteDefaultAddress() throws Exception {
-        User user = User.register("test@gmail.com", "0987654321", "hashed", UserRole.CUSTOMER);
-        Customer customer = Customer.create(user, "Nguyen Van A", "0987654321");
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        Customer customer = Customer.create(userId, "Nguyen Van A", "0987654321");
 
         Address addr = customer.addAddress("Home", "123 Street", "Dist 1", "HCM", BigDecimal.ZERO, BigDecimal.ZERO,
                 true);
         UUID addressId = UuidCreator.getTimeOrderedEpoch();
         setPrivateField(addr, "id", addressId);
-        UUID userId = UuidCreator.getTimeOrderedEpoch();
 
-        when(customerRepository.findByUserId(any())).thenReturn(Optional.of(customer));
+        when(customerRepository.findByAuthUserId(any())).thenReturn(Optional.of(customer));
 
         RemoveAddressCommand cmd = new RemoveAddressCommand(userId, addressId);
         useCase.removeAddress(cmd);
@@ -98,5 +95,26 @@ class ManageAddressUseCaseTests {
         assertTrue(addr.isDeleted());
         assertNotNull(addr.getDeletedAt());
         assertFalse(addr.isDefaultAddress());
+    }
+
+    @Test
+    void setDefaultAddress_ShouldUnsetPreviousDefault() throws Exception {
+        UUID userId = UuidCreator.getTimeOrderedEpoch();
+        Customer customer = Customer.create(userId, "Nguyen Van A", "0987654321");
+        Address home = customer.addAddress("Home", "123 Street", "Dist 1", "HCM", null, null, true);
+        Address work = customer.addAddress("Work", "456 Blvd", "Dist 3", "HCM", null, null, false);
+        UUID homeId = UuidCreator.getTimeOrderedEpoch();
+        UUID workId = UuidCreator.getTimeOrderedEpoch();
+        setPrivateField(home, "id", homeId);
+        setPrivateField(work, "id", workId);
+
+        when(customerRepository.findByAuthUserId(userId)).thenReturn(Optional.of(customer));
+
+        AddressResponse response = useCase.setDefaultAddress(new SetDefaultAddressCommand(userId, workId));
+
+        assertEquals(workId, response.id());
+        assertTrue(work.isDefaultAddress());
+        assertFalse(home.isDefaultAddress());
+        verify(customerRepository).save(customer);
     }
 }

@@ -12,6 +12,7 @@
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
+        <maven.compiler.parameters>true</maven.compiler.parameters>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>3.5.14</spring-boot.version>
         <spring-cloud.version>2025.0.0</spring-cloud.version>
@@ -20,12 +21,14 @@
 
     <modules>
         <module>services/notification-service</module>
+        <module>services/authentication-service</module>
         <module>services/customer-service</module>
         <module>services/delivery-service</module>
         <module>services/order-service</module>
         <module>services/payment-service</module>
         <module>services/restaurant-service</module>
         <module>shared/common-events</module>
+        <module>shared/common-security</module>
         <module>shared/common-web</module>
         <module>shared/common-repo</module>
         <module>infra/eureka-server</module>
@@ -56,9 +59,26 @@
             </dependency>
 
             <dependency>
-                <groupId>com.talenthub</groupId>
+                <groupId>com.fooddelivery</groupId>
                 <artifactId>common-web</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+
+            <!-- ── Distributed Tracing (Micrometer + Brave + Zipkin) ── -->
+            <dependency>
+                <groupId>io.micrometer</groupId>
+                <artifactId>micrometer-tracing-bridge-brave</artifactId>
+                <version>1.5.1</version>
+            </dependency>
+            <dependency>
+                <groupId>io.zipkin.reporter2</groupId>
+                <artifactId>zipkin-reporter-brave</artifactId>
+                <version>3.4.2</version>
+            </dependency>
+            <dependency>
+                <groupId>io.micrometer</groupId>
+                <artifactId>micrometer-registry-prometheus</artifactId>
+                <version>1.14.6</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -70,6 +90,13 @@
                     <groupId>org.springframework.boot</groupId>
                     <artifactId>spring-boot-maven-plugin</artifactId>
                     <version>${spring-boot.version}</version>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>repackage</goal>
+                            </goals>
+                        </execution>
+                    </executions>
                 </plugin>
             </plugins>
         </pluginManagement>

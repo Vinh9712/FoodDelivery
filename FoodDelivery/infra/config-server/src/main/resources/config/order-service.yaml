@@ -2,11 +2,27 @@
 server:
   port: 8083
 
+app:
+  order:
+    pricing:
+      delivery-fee: ${ORDER_DELIVERY_FEE:15000}
+    payment-reconciliation:
+      enabled: true
+      fixed-delay-ms: ${PAYMENT_RECONCILIATION_DELAY_MS:30000}
+    outbox:
+      relay:
+        enabled: ${ORDER_OUTBOX_RELAY_ENABLED:true}
+        poll-delay: ${ORDER_OUTBOX_POLL_DELAY:2s}
+        send-timeout: ${ORDER_OUTBOX_SEND_TIMEOUT:5s}
+        retry-base-delay: ${ORDER_OUTBOX_RETRY_BASE_DELAY:5s}
+        retry-max-delay: ${ORDER_OUTBOX_RETRY_MAX_DELAY:5m}
+        max-attempts: ${ORDER_OUTBOX_MAX_ATTEMPTS:10}
+
 spring:
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/food_order_db
-    username: ${DB_USER}
-    password: ${DB_PASSWORD}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5435}/food_order_db
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:root}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -27,4 +43,9 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
-        spring.json.trusted.packages: "com.fooddelivery.order.*"
+        spring.json.trusted.packages: "com.fooddelivery.order.*,java.util"
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: java.util.Map
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer

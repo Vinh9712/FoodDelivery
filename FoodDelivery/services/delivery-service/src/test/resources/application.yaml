@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: delivery-service
+  config:
+    import: ""
+  cloud:
+    config:
+      enabled: false
+    discovery:
+      enabled: false
+  kafka:
+    listener:
+      auto-startup: false
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;INIT=CREATE DOMAIN IF NOT EXISTS JSONB AS JSON
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+  flyway:
+    enabled: false
+
+eureka:
+  client:
+    enabled: false
+
+app:
+  delivery:
+    outbox:
+      relay:
+        enabled: false
+    assignment:
+      retry-enabled: false
+      max-attempts: 3
+      retry-base-delay: 1s
+      retry-max-delay: 10s

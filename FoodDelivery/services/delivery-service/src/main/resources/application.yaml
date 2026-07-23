@@ -1,32 +1,9 @@
 spring:
   application:
     name: delivery-service
+  threads:
+    virtual:
+      enabled: true  # Java 21 Virtual Threads
 
-  # Pull shared/centralised config; 'optional:' => still boots if Config Server is down.
-  # DataSource, JPA and Flyway are provided centrally by Config Server
-  # (see infra/config-server/.../config/delivery-service.yaml) — single source of truth.
   config:
     import: optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}
-
-  # ── Kafka ──
-  kafka:
-    # bootstrap-servers inherited from the shared application.yaml (${KAFKA_BOOTSTRAP}).
-    consumer:
-      group-id: delivery-service
-      auto-offset-reset: earliest
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      properties:
-        spring.json.trusted.packages: "com.fooddelivery.delivery.*"
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-
-server:
-  port: 8084
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health, info

@@ -1,0 +1,82 @@
+# ══════════════════════════════════════════════════════════════════════
+# Test profile — H2 in-memory, no Eureka, no Config Server
+# Feign clients point to WireMock servers
+# ══════════════════════════════════════════════════════════════════════
+spring:
+  application:
+    name: order-service
+  threads:
+    virtual:
+      enabled: true
+
+  # Disable Config Server import trong test
+  config:
+    import: ""
+  cloud:
+    config:
+      enabled: false
+    discovery:
+      enabled: false
+
+  # H2 in-memory database
+  datasource:
+    url: jdbc:h2:mem:order_test_db;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+  # Flyway disabled — H2 schema tạo bởi Hibernate ddl-auto
+  flyway:
+    enabled: false
+
+  # Disable Kafka trong test
+  kafka:
+    bootstrap-servers: localhost:9999
+    consumer:
+      auto-startup: false
+
+# Disable Eureka
+eureka:
+  client:
+    enabled: false
+
+# ── Feign clients → point to WireMock servers ──
+# Khi Eureka disabled, Feign cần URL tĩnh
+spring.cloud.openfeign.client.config:
+  payment-service:
+    url: http://localhost:18082
+  delivery-service:
+    url: http://localhost:18083
+  notification-service:
+    url: http://localhost:18084
+  restaurant-service:
+    url: http://localhost:18085
+
+app:
+  security:
+    internal-service-secret: test-internal-secret
+  order:
+    pricing:
+      delivery-fee: 15000
+    payment-reconciliation:
+      enabled: false
+    outbox:
+      relay:
+        enabled: false
+
+server:
+  port: 0  # Random port cho test
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 public record UpdateAddressCommand(
-    UUID userId,
+    UUID authUserId,
     UUID addressId,
     String label,
     String addressLine,

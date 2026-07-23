@@ -1,50 +1,6 @@
-# Cấu hình tối thiểu cho Restaurant Service
-# Phần còn lại lấy từ Config Server
-
 spring:
   application:
     name: restaurant-service
 
-server:
-  port: 8082
-
-eureka:
-  client:
-    service-url:
-      defaultZone: http://localhost:8761/eureka/
-    enabled: true
-    fetch-registry: true
-    register-with-eureka: true
-  instance:
-    prefer-ip-address: true
-    lease-renewal-interval-in-seconds: 10
-    lease-expiration-duration-in-seconds: 30
-
-logging:
-  level:
-    com.fooddelivery.restaurant: INFO
-    com.netflix.eureka: DEBUG
-
-resilience4j:
-  circuitbreaker:
-    instances:
-      restaurantService:
-        sliding-window-size: 10
-        failure-rate-threshold: 50
-        wait-duration-in-open-state: 10s
-        permitted-number-of-calls-in-half-open-state: 3
-        automatic-transition-from-open-to-half-open-enabled: true
-  retry:
-    instances:
-      restaurantService:
-        max-attempts: 3
-        wait-duration: 2s
-  timelimiter:
-    instances:
-      restaurantService:
-        timeout-duration: 5s
-
-  app:
-    jwt:
-      secret: ${JWT_SECRET:mySecretKey123456789012345678901234567890}
-      expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  config:
+    import: optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}

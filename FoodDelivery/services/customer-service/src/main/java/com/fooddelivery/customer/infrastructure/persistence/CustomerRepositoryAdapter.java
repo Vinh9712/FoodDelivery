@@ -26,7 +26,12 @@ public class CustomerRepositoryAdapter implements CustomerRepository {
     }
 
     @Override
-    public Optional<Customer> findByUserId(UUID userId) {
-        return customerJPARepository.findByUserId(userId);
+    public Optional<Customer> findByAuthUserId(UUID authUserId) {
+        return customerJPARepository.findByAuthUserId(authUserId);
+    }
+
+    @Override
+    public void unsetDefaultAddresses(UUID customerId) {
+        customerJPARepository.unsetDefaultAddresses(customerId);
     }
 }

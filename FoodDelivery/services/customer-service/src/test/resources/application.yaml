@@ -1,0 +1,19 @@
+spring:
+  config:
+    import: ""
+  cloud:
+    bus:
+      enabled: false
+    config:
+      enabled: false
+  kafka:
+    listener:
+      auto-startup: false
+
+eureka:
+  client:
+    enabled: false
+
+app:
+  internal:
+    gateway-secret: test-gateway-secret

@@ -14,8 +14,10 @@ FoodDelivery/
 ├── shared/
 │   ├── common-events/
 │   ├── common-repo/
+│   ├── common-security/
 │   └── common-web/
 └── services/
+    ├── authentication-service/
     ├── customer-service/
     ├── delivery-service/
     ├── notification-service/
@@ -65,8 +67,11 @@ src/main/java/com/fooddelivery/<service>/
 
 ## Service chính
 
+### `authentication-service`
+Chịu trách nhiệm `User`, JWT, login/register/logout, refresh token, session và phân quyền role.
+
 ### `customer-service`
-Chịu trách nhiệm `User`, `Customer`, `Address`, `RefreshToken`, auth JWT, login/register/logout, profile, address management, phân quyền role.
+Chịu trách nhiệm `Customer`, `Address`, profile và address management.
 
 ### Các service khác
 - `restaurant-service`: quản lý restaurant, menu, menu item.
@@ -77,7 +82,7 @@ Chịu trách nhiệm `User`, `Customer`, `Address`, `RefreshToken`, auth JWT, l
 
 ## Customer/Auth Service scope
 
-Service này chạy độc lập và có database riêng.
+Auth và customer chạy độc lập, mỗi service có database riêng.
 
 API chính:
 - `POST /auth/register`
@@ -91,9 +96,38 @@ API chính:
 - `PUT /customers/me/addresses/{id}`
 - `DELETE /customers/me/addresses/{id}`
 
+## Authentication và Authorization
+
+- `authentication-service` phát access token `RS256` có TTL 15 phút và public key tại `/.well-known/jwks.json`.
+- API Gateway và từng business service tự kiểm tra signature, `iss`, `aud`, `exp`; không tin `X-User-Id` do client gửi.
+- `CUSTOMER` chỉ thao tác profile/order của chính mình; `RESTAURANT_OWNER` chỉ sửa restaurant/menu mình sở hữu; `ADMIN` có quyền quản trị.
+- Payment, delivery scheduling và notification side effects chỉ mở dưới `/internal/**`, xác thực bằng `X-Internal-Service-Secret`.
+- Public create-order chỉ nhận `restaurantId`, địa chỉ và `menuItemId`/số lượng. `customerId` lấy từ JWT; tên món, giá, giảm giá và minimum order do restaurant-service báo giá qua API nội bộ; phí giao hàng do order-service cấu hình.
+- Order-service kiểm tra tính nhất quán của báo giá, lưu snapshot giá server-side và gửi đúng tổng tiền đã lưu sang payment-service; client không thể tự đặt `unitPrice`, `discountAmount`, `deliveryFee` hoặc `totalAmount`.
+- Tạo order yêu cầu `Idempotency-Key`; retry cùng customer/key trả lại order cũ và không thanh toán/giao vận lần hai.
+- Payment được lưu bền vững theo unique `orderId`, kiểm tra request hash/idempotency key, refund idempotent và phát outbox event. Order PENDING được reconciliation thay vì hủy ngay khi mất response thanh toán.
+- Review chỉ dành cho CUSTOMER và chỉ được tạo khi order-service xác nhận đơn thuộc đúng customer, đúng restaurant và đã `DELIVERED`; rating có constraint `1..5` ở entity và database.
+- Refresh token được rotation; logout, đổi role, deactivate hoặc phát hiện reuse sẽ revoke refresh token/session ngay. Access token đã phát có thể còn hiệu lực tối đa đến hết TTL.
+
+Biến môi trường bảo mật chính:
+
+```text
+JWT_ISSUER=food-delivery-auth
+JWT_AUDIENCE=food-delivery-api
+JWT_KEY_ID=food-delivery-auth-1
+JWT_PRIVATE_KEY_BASE64=<PKCS#8 DER, base64>
+JWT_PUBLIC_KEY_BASE64=<X.509 DER, base64>
+INTERNAL_SERVICE_SECRET=<random secret>
+ORDER_DELIVERY_FEE=15000
+```
+
+Nếu không cấu hình RSA key pair, auth service tạo key tạm thời để chạy local single-replica; không dùng chế độ này cho production hoặc nhiều replica.
+
+Khi chạy với PostgreSQL volume cũ còn database `user_db`, đặt `CUSTOMER_DB_NAME=user_db` trong `.env`. Migration mới sẽ rename `customers.user_id` thành `auth_user_id` mà không sửa checksum migration V1 lịch sử.
+
 ## Event model
 
-Theo structure hiện tại, service dùng event contract chung từ `shared/common-events` và publish qua RabbitMQ, không cần Kafka.
+Theo structure hiện tại, service dùng event contract chung từ `shared/common-events` và publish qua Kafka.
 
 Event chính:
 - `customer.registered`
@@ -137,8 +171,8 @@ cp .env.example .env          # set DB_USER / DB_PASSWORD
 docker compose up --build
 ```
 
-Compose dựng PostgreSQL + Kafka + Kafka-UI + Keycloak + Eureka + Config Server + API
-Gateway + 6 service, đúng thứ tự khởi động qua healthcheck. Credential DB lấy từ `.env`
+Compose dựng PostgreSQL + Kafka + Kafka-UI + Keycloak legacy (optional) + Eureka + Config Server + API
+Gateway + 7 service, đúng thứ tự khởi động qua healthcheck. Credential DB và security lấy từ `.env`
 (không hardcode). Chi tiết: [docs/PLATFORM.md](docs/PLATFORM.md#run-the-whole-stack-with-docker-compose).
 
 ## Ghi chú

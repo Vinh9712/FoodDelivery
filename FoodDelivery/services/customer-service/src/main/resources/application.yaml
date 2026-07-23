@@ -2,50 +2,5 @@ spring:
   application:
     name: customer-service
 
-  # Pull shared/centralised config; 'optional:' => still boots if Config Server is down.
-  # DataSource, JPA, Flyway and Kafka are provided centrally by Config Server
-  # (see infra/config-server/.../config/customer-service.yaml) — single source of truth.
   config:
     import: optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}
-
-server:
-  port: ${SERVER_PORT:8081}
-  forward-headers-strategy: framework
-
-app:
-  jwt:
-    secret: ${JWT_SECRET:135791234567892468helloworldantisercet135791234567892468helloworldantisercet135791234567892468helloworldantisercet}
-    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
-
-# ============================================================
-# EUREKA CONFIG (Service Discovery)
-# ============================================================
-eureka:
-  client:
-    service-url:
-      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
-    enabled: true
-    register-with-eureka: true
-    fetch-registry: true
-  instance:
-    prefer-ip-address: true
-    lease-renewal-interval-in-seconds: 10
-    lease-expiration-duration-in-seconds: 30
-
-# ============================================================
-# LOGGING
-# ============================================================
-logging:
-  level:
-    com.fooddelivery.customer: DEBUG
-    com.fooddelivery.customer.client: DEBUG
-    com.netflix.eureka: DEBUG
-
-# ============================================================
-# ACTUATOR
-# ============================================================
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health, info, refresh

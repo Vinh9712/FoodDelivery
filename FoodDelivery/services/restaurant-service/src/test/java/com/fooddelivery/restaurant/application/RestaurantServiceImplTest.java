@@ -6,7 +6,6 @@ import com.fooddelivery.restaurant.api.dto.RestaurantSearchRequest;
 import com.fooddelivery.restaurant.domain.Restaurant;
 import com.fooddelivery.restaurant.domain.RestaurantRepository;
 import com.fooddelivery.restaurant.domain.RestaurantStatus;
-import com.fooddelivery.restaurant.event.EventPublisher;
 import com.fooddelivery.restaurant.exception.RestaurantNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,6 +21,7 @@ import org.springframework.data.domain.Pageable;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -34,9 +34,6 @@ class RestaurantServiceImplTest {
 
     @Mock
     private RestaurantRepository restaurantRepository;
-
-    @Mock
-    private EventPublisher eventPublisher;
 
     @InjectMocks
     private RestaurantServiceImpl restaurantService;
@@ -95,7 +92,6 @@ class RestaurantServiceImplTest {
         assertEquals("PENDING", response.getStatus());
 
         verify(restaurantRepository, times(1)).save(any(Restaurant.class));
-        verify(eventPublisher, times(1)).publishRestaurantCreated(any(Restaurant.class));
     }
 
     @Test
@@ -203,7 +199,6 @@ class RestaurantServiceImplTest {
 
         verify(restaurantRepository, times(1)).findById(restaurantId);
         verify(restaurantRepository, times(1)).save(any(Restaurant.class));
-        verify(eventPublisher, times(1)).publishRestaurantUpdated(any(Restaurant.class));
     }
 
     @Test
@@ -218,7 +213,6 @@ class RestaurantServiceImplTest {
         // Assert
         verify(restaurantRepository, times(1)).existsById(restaurantId);
         verify(restaurantRepository, times(1)).deleteById(restaurantId);
-        verify(eventPublisher, times(1)).publishRestaurantDeleted(restaurantId);
     }
 
     @Test
@@ -234,7 +228,6 @@ class RestaurantServiceImplTest {
 
         verify(restaurantRepository, times(1)).existsById(nonExistentId);
         verify(restaurantRepository, never()).deleteById(any());
-        verify(eventPublisher, never()).publishRestaurantDeleted(any());
     }
 
     @Test
@@ -274,5 +267,40 @@ class RestaurantServiceImplTest {
                 isNull(),
                 isNull(),
                 any(Pageable.class));
+    }
+
+    @Test
+    void searchRestaurants_ShouldParseStatusIndependentlyOfDefaultLocale() {
+        Locale previousLocale = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+            RestaurantSearchRequest searchRequest = RestaurantSearchRequest.builder()
+                    .status("inactive")
+                    .page(0)
+                    .size(10)
+                    .build();
+            Pageable pageable = PageRequest.of(0, 10);
+            when(restaurantRepository.searchRestaurants(
+                    isNull(),
+                    isNull(),
+                    isNull(),
+                    eq(RestaurantStatus.INACTIVE),
+                    isNull(),
+                    any(Pageable.class)))
+                    .thenReturn(Page.empty(pageable));
+
+            Page<RestaurantResponse> responses = restaurantService.searchRestaurants(searchRequest);
+
+            assertTrue(responses.isEmpty());
+            verify(restaurantRepository).searchRestaurants(
+                    isNull(),
+                    isNull(),
+                    isNull(),
+                    eq(RestaurantStatus.INACTIVE),
+                    isNull(),
+                    any(Pageable.class));
+        } finally {
+            Locale.setDefault(previousLocale);
+        }
     }
 }

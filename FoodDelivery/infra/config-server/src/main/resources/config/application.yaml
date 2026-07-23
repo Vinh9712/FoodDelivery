@@ -1,33 +1,50 @@
-# =====================================================================
-# SHARED configuration served by Config Server to ALL services.
-# Anything here is inherited by every config client. Override per
-# service in <service-name>.yaml (e.g. order-service.yaml).
-# =====================================================================
 
-# ── Service Discovery (Eureka) ──
+
 eureka:
   client:
     service-url:
       defaultZone: ${EUREKA_URI:http://localhost:8761/eureka/}
   instance:
     prefer-ip-address: true
-    # Unique instance id so multiple instances on one host don't collide.
     instance-id: ${spring.application.name}:${random.value}
 
-# ── Actuator / Monitoring ──
 management:
   endpoints:
     web:
       exposure:
-        include: health, info, metrics, prometheus
+        include: health, info, metrics, prometheus, refresh
   endpoint:
     health:
       show-details: ${ACTUATOR_HEALTH_DETAILS:never}
+    refresh:
+      access: unrestricted
   metrics:
     tags:
       application: ${spring.application.name}
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
+  tracing:
+    sampling:
+      probability: 1.0
 
-# ── Messaging (Kafka) common defaults ──
 spring:
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+  cloud:
+    bus:
+      enabled: true
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: ${FEIGN_CONNECT_TIMEOUT_MS:2000}
+            read-timeout: ${FEIGN_READ_TIMEOUT_MS:5000}
+
+app:
+  security:
+    jwt:
+      jwk-set-uri: ${AUTH_JWKS_URI:http://localhost:8087/.well-known/jwks.json}
+      issuer: ${JWT_ISSUER:food-delivery-auth}
+      audience: ${JWT_AUDIENCE:food-delivery-api}
+    internal-service-secret: ${INTERNAL_SERVICE_SECRET:}

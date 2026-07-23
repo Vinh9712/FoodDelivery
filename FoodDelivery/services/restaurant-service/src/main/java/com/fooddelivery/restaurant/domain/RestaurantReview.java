@@ -10,7 +10,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "restaurant_reviews",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"restaurant_id", "order_id"}))
+        uniqueConstraints = @UniqueConstraint(columnNames = "order_id"))
 @Getter
 @Setter
 @Builder
@@ -37,9 +37,6 @@ public class RestaurantReview {
     @Column(columnDefinition = "TEXT")
     private String comment;
 
-    @Column(columnDefinition = "TEXT[]")
-    private String[] images;
-
     @Column(name = "is_verified_purchase")
     private Boolean isVerifiedPurchase;
 
@@ -53,6 +50,18 @@ public class RestaurantReview {
 
     @PrePersist
     protected void onCreate() {
+        validateRating();
         if (isVerifiedPurchase == null) isVerifiedPurchase = false;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        validateRating();
+    }
+
+    private void validateRating() {
+        if (rating == null || rating < 1 || rating > 5) {
+            throw new IllegalArgumentException("Rating must be between 1 and 5");
+        }
     }
 }

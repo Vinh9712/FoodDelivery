@@ -5,18 +5,18 @@
 #   2. docker compose up --build
 #
 # Boot order is enforced via healthchecks:
-#   postgres + kafka + keycloak  ->  eureka + config-server  ->  services + gateway
+#   postgres + kafka -> eureka + config-server -> authentication -> services + gateway
 #
 # Ports (host:container):
 #   8080 api-gateway   8081 customer   8082 restaurant   8083 order
-#   8084 delivery      8085 payment    8086 notification
+#   8084 delivery      8085 payment    8086 notification 8087 authentication
 #   8761 eureka        8888 config-server
-#   5432 postgres      9092 kafka      8090 kafka-ui      8180 keycloak
+#   5432 postgres      9092 kafka      8090 kafka-ui      8180 optional legacy keycloak
 # =====================================================================
 
 name: fooddelivery
 
-# ── Reusable fragments ──────────────────────────────────────────────
+# Reusable fragments
 x-maven-build: &maven-build
   context: .
   dockerfile: Dockerfile
@@ -27,7 +27,13 @@ x-app-base: &app-base
 
 x-discovery-env: &discovery-env
   CONFIG_SERVER_URI: http://config-server:8888
+  SPRING_CLOUD_CONFIG_USERNAME: ${CONFIG_SERVER_USERNAME}
+  SPRING_CLOUD_CONFIG_PASSWORD: ${CONFIG_SERVER_PASSWORD}
   EUREKA_URI: http://eureka-server:8761/eureka/
+  AUTH_JWKS_URI: http://authentication-service:8087/.well-known/jwks.json
+  JWT_ISSUER: ${JWT_ISSUER:-food-delivery-auth}
+  JWT_AUDIENCE: ${JWT_AUDIENCE:-food-delivery-api}
+  INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
 
 x-infra-deps: &infra-deps
   config-server:
@@ -43,7 +49,7 @@ x-actuator-health: &actuator-health
   start_period: 60s
 
 services:
-  # ── Backing services ──────────────────────────────────────────────
+  #  Backing services
   postgres:
     image: postgres:16
     container_name: fd-postgres
@@ -51,7 +57,7 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
-      - "5432:5432"
+      - "5435:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -101,6 +107,7 @@ services:
     networks: [backend]
 
   keycloak:
+    profiles: [legacy-keycloak]
     image: quay.io/keycloak/keycloak:26.0
     container_name: fd-keycloak
     command: ["start-dev", "--import-realm"]
@@ -120,7 +127,7 @@ services:
       retries: 10
     networks: [backend]
 
-  # ── Platform infrastructure (Spring) ──────────────────────────────
+  # --- Platform infrastructure (Spring) ---
   eureka-server:
     <<: *app-base
     build:
@@ -143,6 +150,18 @@ services:
     container_name: fd-config-server
     ports:
       - "8888:8888"
+    environment:
+      CONFIG_SERVER_PROFILE: ${CONFIG_SERVER_PROFILE:-native}
+      CONFIG_SERVER_USERNAME: ${CONFIG_SERVER_USERNAME}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
+      CONFIG_GIT_URI: ${CONFIG_GIT_URI:-}
+      CONFIG_GIT_LABEL: ${CONFIG_GIT_LABEL:-main}
+      CONFIG_GIT_SEARCH_PATHS: ${CONFIG_GIT_SEARCH_PATHS:-}
+      CONFIG_GIT_USERNAME: ${CONFIG_GIT_USERNAME:-}
+      CONFIG_GIT_PASSWORD: ${CONFIG_GIT_PASSWORD:-}
+      KAFKA_BOOTSTRAP: kafka:9092
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
+      INTERNAL_GATEWAY_SECRET: ${INTERNAL_GATEWAY_SECRET}
     healthcheck:
       <<: *actuator-health
       test: ["CMD-SHELL", "curl -fsS http://localhost:8888/actuator/health || exit 1"]
@@ -156,21 +175,51 @@ services:
     container_name: fd-api-gateway
     depends_on:
       <<: *infra-deps
-      keycloak:
+      authentication-service:
         condition: service_healthy
     environment:
       <<: *discovery-env
-      # NOTE: tokens minted via http://localhost:8180 carry that issuer; if you
-      # call the gateway with such a token the issuer will not match this URL.
-      # For pure dev you can disable auth with SPRING_PROFILES_ACTIVE=insecure.
-      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/fooddelivery
+      INTERNAL_GATEWAY_SECRET: ${INTERNAL_GATEWAY_SECRET}
+      KAFKA_BOOTSTRAP: kafka:9092
     ports:
       - "8080:8080"
     healthcheck:
       <<: *actuator-health
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
 
-  # ── Business services ─────────────────────────────────────────────
+  # -- Business services -----------------------------------------------
+  authentication-service:
+    <<: *app-base
+    build:
+      <<: *maven-build
+      args:
+        MODULE: services/authentication-service
+    container_name: fd-authentication-service
+    depends_on:
+      <<: *infra-deps
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      <<: *discovery-env
+      KAFKA_BOOTSTRAP: kafka:9092
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_ISSUER: ${JWT_ISSUER:-food-delivery-auth}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-food-delivery-api}
+      JWT_KEY_ID: ${JWT_KEY_ID:-food-delivery-auth-1}
+      JWT_PRIVATE_KEY_BASE64: ${JWT_PRIVATE_KEY_BASE64:-}
+      JWT_PUBLIC_KEY_BASE64: ${JWT_PUBLIC_KEY_BASE64:-}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-900000}
+    ports:
+      - "8087:8087"
+    healthcheck:
+      <<: *actuator-health
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8087/actuator/health || exit 1"]
+
   customer-service:
     <<: *app-base
     build:
@@ -191,6 +240,8 @@ services:
       DB_PORT: "5432"
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
+      CUSTOMER_DB_NAME: ${CUSTOMER_DB_NAME:-customer_db}
+      INTERNAL_GATEWAY_SECRET: ${INTERNAL_GATEWAY_SECRET}
     ports:
       - "8081:8081"
     healthcheck:
@@ -206,8 +257,15 @@ services:
     container_name: fd-restaurant-service
     depends_on:
       <<: *infra-deps
+      postgres:
+        condition: service_healthy
     environment:
       <<: *discovery-env
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
     ports:
       - "8082:8082"
     healthcheck:
@@ -234,6 +292,9 @@ services:
       DB_PORT: "5432"
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
+      ORDER_DELIVERY_FEE: ${ORDER_DELIVERY_FEE:-15000}
+      PAYMENT_RECONCILIATION_DELAY_MS: ${PAYMENT_RECONCILIATION_DELAY_MS:-30000}
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
     ports:
       - "8083:8083"
     healthcheck:
@@ -260,6 +321,7 @@ services:
       DB_PORT: "5432"
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
     ports:
       - "8084:8084"
     healthcheck:
@@ -275,8 +337,20 @@ services:
     container_name: fd-payment-service
     depends_on:
       <<: *infra-deps
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     environment:
       <<: *discovery-env
+      KAFKA_BOOTSTRAP: kafka:9092
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      PAYMENT_DB_NAME: ${PAYMENT_DB_NAME:-payment_db}
+      PAYMENT_SIMULATOR_MAX_AMOUNT: ${PAYMENT_SIMULATOR_MAX_AMOUNT:-500000}
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
     ports:
       - "8085:8085"
     healthcheck:
@@ -292,16 +366,61 @@ services:
     container_name: fd-notification-service
     depends_on:
       <<: *infra-deps
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     environment:
       <<: *discovery-env
+      KAFKA_BOOTSTRAP: kafka:9092
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
     ports:
       - "8086:8086"
     healthcheck:
       <<: *actuator-health
       test: ["CMD-SHELL", "curl -fsS http://localhost:8086/actuator/health || exit 1"]
 
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: fd-prometheus
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks: [backend]
+
+  grafana:
+    image: grafana/grafana:11.1.4
+    container_name: fd-grafana
+    depends_on:
+      prometheus:
+        condition: service_started
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks: [backend]
+
+  zipkin:
+    image: openzipkin/zipkin:3.4
+    container_name: fd-zipkin
+    ports:
+      - "9411:9411"
+    networks: [backend]
 volumes:
   pgdata:
+  grafana-data:
 
 networks:
   backend:

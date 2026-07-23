@@ -2,28 +2,41 @@ spring:
   application:
     name: order-service
 
-  # Pull shared/centralised config; 'optional:' => still boots if Config Server is down.
-  # DataSource, JPA and Flyway are provided centrally by Config Server
-  # (see infra/config-server/.../config/order-service.yaml) — single source of truth.
+  threads:
+    virtual:
+      enabled: true  # Java 21 Virtual Threads — giúp Feign call đồng bộ không block OS thread
+
   config:
     import: optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}
 
-  # ── Kafka ──
-  kafka:
-    # bootstrap-servers inherited from the shared application.yaml (${KAFKA_BOOTSTRAP}).
-    consumer:
-      group-id: order-service
-      auto-offset-reset: earliest
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      properties:
-        spring.json.trusted.packages: "com.fooddelivery.order.*"
+  # ============================================================
+  # THÊM CẤU HÌNH DATABASE VÀO ĐÂY
+  # ============================================================
+  datasource:
+    url: jdbc:postgresql://localhost:5432/order_db
+    username: postgres
+    password: 123
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: true
+
+  flyway:
+    enabled: false
 
 server:
   port: 8083
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health, info
+eureka:
+  client:
+    enabled: false
+
+logging:
+  level:
+    com.fooddelivery.order: DEBUG

@@ -1,13 +1,60 @@
+# payment-service/src/main/resources/application.yml
 spring:
   application:
     name: payment-service
-  # Pull shared/centralised config; 'optional:' => still boots if Config Server is down.
+  threads:
+    virtual:
+      enabled: true
   config:
     import: optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}
+  datasource:
+    url: jdbc:postgresql://localhost:5432/payment_db
+    username: postgres
+    password: 123
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: true
+  flyway:
+    enabled: false
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        enable.idempotence: true
+        acks: all
+        retries: 3
+
+app:
+  payment:
+    simulator:
+      max-amount: 500000
+    outbox:
+      relay:
+        enabled: true
+        poll-delay: 2s
+        send-timeout: 5s
+        retry-base-delay: 5s
+        retry-max-delay: 5m
+        max-attempts: 10
+
 server:
-  port: 8085
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health, info
+  port: 8084
+
+eureka:
+  client:
+    enabled: false
+
+logging:
+  level:
+    com.fooddelivery.payment: DEBUG
+    org.springframework.scheduling: INFO
+    org.springframework.kafka: DEBUG
+    org.hibernate.SQL: DEBUG

@@ -1,20 +1,48 @@
+server:
+  port: 8888
+
 spring:
   application:
     name: config-server
+  profiles:
+    active: ${CONFIG_SERVER_PROFILE:native}
+  security:
+    user:
+      name: ${CONFIG_SERVER_USERNAME:config-client}
+      password: ${CONFIG_SERVER_PASSWORD:changeit}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, busrefresh
+
+---
+spring:
+  config:
+    activate:
+      on-profile: native
+  cloud:
+    config:
+      server:
+        native:
+          search-locations: classpath:/config
+
+---
+spring:
+  config:
+    activate:
+      on-profile: git
   cloud:
     config:
       server:
         git:
-          uri: file:///${user.home}/food-delivery-config
-          default-label: main
-          search-paths: '{application}'
+          uri: ${CONFIG_GIT_URI}
+          default-label: ${CONFIG_GIT_LABEL:main}
+          search-paths: ${CONFIG_GIT_SEARCH_PATHS:}
           clone-on-start: true
-
-server:
-  port: 8888
-
-logging:
-  level:
-    com.fooddelivery: DEBUG
-    org.springframework.cloud: DEBUG
+          force-pull: true
+          username: ${CONFIG_GIT_USERNAME:}
+          password: ${CONFIG_GIT_PASSWORD:}
