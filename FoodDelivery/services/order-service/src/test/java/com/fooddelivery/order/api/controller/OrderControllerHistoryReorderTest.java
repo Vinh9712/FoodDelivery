@@ -2,7 +2,9 @@ package com.fooddelivery.order.api.controller;
 
 import com.fooddelivery.order.api.dto.OrderResponse;
 import com.fooddelivery.order.api.mapper.OrderMapper;
+import com.fooddelivery.order.application.OrderCancellationService;
 import com.fooddelivery.order.domain.model.Order;
+import com.fooddelivery.order.domain.model.OrderItem;
 import com.fooddelivery.order.domain.model.valueobject.OrderStatus;
 import com.fooddelivery.order.domain.model.valueobject.PaymentStatus;
 import com.fooddelivery.order.domain.model.valueobject.RefundStatus;
@@ -12,6 +14,7 @@ import com.fooddelivery.order.security.OrderAuthorizationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -24,19 +27,23 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class OrderControllerListTest {
+class OrderControllerHistoryReorderTest {
 
     @Mock
     private OrderRepository orderRepository;
@@ -46,77 +53,98 @@ class OrderControllerListTest {
     private OrderSagaOrchestrator sagaOrchestrator;
     @Mock
     private OrderAuthorizationService orderAuthorization;
+    @Mock
+    private OrderCancellationService orderCancellationService;
+    @Mock
+    private Clock clock;
 
     private OrderController controller;
 
     private final UUID customerId = UUID.randomUUID();
     private final UUID orderId = UUID.randomUUID();
     private final UUID restaurantId = UUID.randomUUID();
-
-    @Mock
-    private com.fooddelivery.order.application.OrderCancellationService orderCancellationService;
-    @Mock
-    private java.time.Clock clock;
+    private final UUID menuItemId = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
         controller = new OrderController(
-                orderRepository, orderMapper, sagaOrchestrator, orderAuthorization, orderCancellationService, clock);
+                orderRepository, orderMapper, sagaOrchestrator,
+                orderAuthorization, orderCancellationService, clock);
     }
 
     @Test
-    void adminListsAllOrdersWithoutUserId() {
-        Order order = org.mockito.Mockito.mock(Order.class);
+    void historyDefaultsToDeliveredAndCancelled() {
+        Order order = mock(Order.class);
         Pageable pageable = PageRequest.of(0, 20);
-        when(orderAuthorization.resolveListCustomerFilter(isNull(), any())).thenReturn(null);
-        when(orderRepository.findAllFiltered(isNull(), isNull(), isNull(), isNull(), isNull(), eq(pageable)))
-                .thenReturn(new PageImpl<>(List.of(order), pageable, 1));
-        when(orderMapper.toResponse(order)).thenReturn(response(OrderStatus.PAID));
-
-        ResponseEntity<Page<OrderResponse>> result =
-                controller.listOrders(null, null, null, null, null, null, pageable, auth(UUID.randomUUID(), "ADMIN"));
-
-        assertThat(result.getStatusCode().value()).isEqualTo(200);
-        assertThat(result.getBody()).isNotNull();
-        assertThat(result.getBody().getContent()).hasSize(1);
-        verify(orderRepository).findAllFiltered(null, null, null, null, null, pageable);
-    }
-
-    @Test
-    void adminListsFilteredByUserIdAndStatus() {
-        Order order = org.mockito.Mockito.mock(Order.class);
-        Pageable pageable = PageRequest.of(0, 10);
-        when(orderAuthorization.resolveListCustomerFilter(eq(customerId), any())).thenReturn(customerId);
-        when(orderRepository.findAllFiltered(eq(customerId), eq(OrderStatus.DELIVERED), isNull(), isNull(), isNull(), eq(pageable)))
+        Authentication auth = auth(customerId, "CUSTOMER");
+        when(orderAuthorization.resolveHistoryCustomerId(customerId, auth)).thenReturn(customerId);
+        when(orderRepository.findHistoryByCustomerAndStatusIn(eq(customerId), any(), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(order), pageable, 1));
         when(orderMapper.toResponse(order)).thenReturn(response(OrderStatus.DELIVERED));
 
         ResponseEntity<Page<OrderResponse>> result =
-                controller.listOrders(customerId, null, OrderStatus.DELIVERED, null, null, null, pageable, auth(UUID.randomUUID(), "ADMIN"));
-
-        assertThat(result.getBody()).isNotNull();
-        assertThat(result.getBody().getContent().getFirst().status()).isEqualTo(OrderStatus.DELIVERED);
-        verify(orderRepository).findAllFiltered(customerId, OrderStatus.DELIVERED, null, null, null, pageable);
-    }
-
-    @Test
-    void customerListsOwnOrders() {
-        Order order = org.mockito.Mockito.mock(Order.class);
-        Pageable pageable = PageRequest.of(0, 20);
-        Authentication customerAuth = auth(customerId, "CUSTOMER");
-        when(orderAuthorization.resolveListCustomerFilter(eq(customerId), eq(customerAuth))).thenReturn(customerId);
-        when(orderRepository.findAllFiltered(eq(customerId), isNull(), isNull(), isNull(), isNull(), eq(pageable)))
-                .thenReturn(new PageImpl<>(List.of(order), pageable, 1));
-        when(orderMapper.toResponse(order)).thenReturn(response(OrderStatus.CONFIRMED));
-
-        ResponseEntity<Page<OrderResponse>> result =
-                controller.listOrders(customerId, null, null, null, null, null, pageable, customerAuth);
+                controller.history(customerId, null, pageable, auth);
 
         assertThat(result.getStatusCode().value()).isEqualTo(200);
         assertThat(result.getBody()).isNotNull();
         assertThat(result.getBody().getContent()).hasSize(1);
-        verify(orderAuthorization).resolveListCustomerFilter(customerId, customerAuth);
-        verify(orderRepository).findAllFiltered(customerId, null, null, null, null, pageable);
+
+        ArgumentCaptor<Collection<OrderStatus>> statuses = ArgumentCaptor.forClass(Collection.class);
+        verify(orderRepository).findHistoryByCustomerAndStatusIn(eq(customerId), statuses.capture(), eq(pageable));
+        assertThat(statuses.getValue()).containsExactlyInAnyOrder(
+                OrderStatus.DELIVERED, OrderStatus.CANCELLED);
+    }
+
+    @Test
+    void historyRespectsStatusFilter() {
+        Order order = mock(Order.class);
+        Pageable pageable = PageRequest.of(0, 10);
+        Authentication auth = auth(customerId, "CUSTOMER");
+        when(orderAuthorization.resolveHistoryCustomerId(customerId, auth)).thenReturn(customerId);
+        when(orderRepository.findHistoryByCustomerAndStatusIn(eq(customerId), any(), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(order), pageable, 1));
+        when(orderMapper.toResponse(order)).thenReturn(response(OrderStatus.CANCELLED));
+
+        controller.history(customerId, OrderStatus.CANCELLED, pageable, auth);
+
+        ArgumentCaptor<Collection<OrderStatus>> statuses = ArgumentCaptor.forClass(Collection.class);
+        verify(orderRepository).findHistoryByCustomerAndStatusIn(eq(customerId), statuses.capture(), eq(pageable));
+        assertThat(statuses.getValue()).containsExactly(OrderStatus.CANCELLED);
+    }
+
+    @Test
+    void reorderPlacesNewOrderFromSource() {
+        Order source = mock(Order.class);
+        OrderItem item = mock(OrderItem.class);
+        Order created = mock(Order.class);
+        Authentication auth = auth(customerId, "CUSTOMER");
+
+        when(orderRepository.findDetailedById(orderId)).thenReturn(Optional.of(source));
+        when(source.getCustomerId()).thenReturn(customerId);
+        when(source.getRestaurantId()).thenReturn(restaurantId);
+        when(source.getDeliveryAddressJson()).thenReturn("12 Nguyen Hue, Q1");
+        when(source.getNote()).thenReturn("extra chili");
+        when(source.getItems()).thenReturn(List.of(item));
+        when(item.getMenuItemId()).thenReturn(menuItemId);
+        when(item.getQuantity()).thenReturn(2);
+        when(sagaOrchestrator.placeOrder(
+                eq(customerId), eq(restaurantId), eq("12 Nguyen Hue, Q1"),
+                any(), any(), eq("extra chili")))
+                .thenReturn(created);
+        when(orderMapper.toResponse(created)).thenReturn(response(OrderStatus.PENDING));
+
+        ResponseEntity<OrderResponse> result = controller.reorder(orderId, "idem-reorder-1", auth);
+
+        assertThat(result.getStatusCode().value()).isEqualTo(201);
+        assertThat(result.getBody()).isNotNull();
+        assertThat(result.getBody().status()).isEqualTo(OrderStatus.PENDING);
+        verify(sagaOrchestrator).placeOrder(
+                eq(customerId),
+                eq(restaurantId),
+                eq("12 Nguyen Hue, Q1"),
+                eq("idem-reorder-1"),
+                any(),
+                eq("extra chili"));
     }
 
     private Authentication auth(UUID subject, String role) {

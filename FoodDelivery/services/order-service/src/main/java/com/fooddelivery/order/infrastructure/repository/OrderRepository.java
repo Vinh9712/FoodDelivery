@@ -33,18 +33,63 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     Page<Order> findByRestaurantId(UUID restaurantId, Pageable pageable);
 
     /**
-     * Admin/customer order list. Null {@code customerId} = all customers (admin only at call site).
-     * Null {@code status} = any status.
+     * Admin/customer order list. Null filters are ignored.
      */
     @Query("""
             select o from Order o
             where (:customerId is null or o.customerId = :customerId)
               and (:status is null or o.status = :status)
+              and (:restaurantId is null or o.restaurantId = :restaurantId)
+              and (:from is null or o.createdAt >= :from)
+              and (:to is null or o.createdAt <= :to)
             """)
     Page<Order> findAllFiltered(
             @Param("customerId") UUID customerId,
             @Param("status") OrderStatus status,
+            @Param("restaurantId") UUID restaurantId,
+            @Param("from") Instant from,
+            @Param("to") Instant to,
             Pageable pageable);
+
+    /**
+     * Order history for a customer (typically terminal statuses).
+     */
+    @Query("""
+            select o from Order o
+            where o.customerId = :customerId
+              and o.status in :statuses
+            """)
+    Page<Order> findHistoryByCustomerAndStatusIn(
+            @Param("customerId") UUID customerId,
+            @Param("statuses") java.util.Collection<OrderStatus> statuses,
+            Pageable pageable);
+
+    @Query("""
+            select count(o) from Order o
+            where o.restaurantId = :restaurantId
+              and o.createdAt >= :from
+            """)
+    long countByRestaurantSince(@Param("restaurantId") UUID restaurantId, @Param("from") Instant from);
+
+    @Query("""
+            select coalesce(sum(o.totalAmount), 0) from Order o
+            where o.restaurantId = :restaurantId
+              and o.status = com.fooddelivery.order.domain.model.valueobject.OrderStatus.DELIVERED
+              and o.createdAt >= :from
+            """)
+    java.math.BigDecimal sumDeliveredRevenueSince(
+            @Param("restaurantId") UUID restaurantId, @Param("from") Instant from);
+
+    @Query("""
+            select count(o) from Order o
+            where o.restaurantId = :restaurantId
+              and o.status = :status
+              and o.createdAt >= :from
+            """)
+    long countByRestaurantAndStatusSince(
+            @Param("restaurantId") UUID restaurantId,
+            @Param("status") OrderStatus status,
+            @Param("from") Instant from);
 
     /**
      * READY_FOR_PICKUP orders due for delivery reconciliation.

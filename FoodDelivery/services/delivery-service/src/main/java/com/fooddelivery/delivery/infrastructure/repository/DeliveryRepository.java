@@ -26,6 +26,8 @@ public interface DeliveryRepository extends JpaRepository<Delivery, UUID> {
     Page<Delivery> findByDriverIdAndStatusOrderByCreatedAtDesc(
             UUID driverId, DeliveryStatus status, Pageable pageable);
 
+    Page<Delivery> findByStatusOrderByCreatedAtDesc(DeliveryStatus status, Pageable pageable);
+
     Optional<Delivery> findFirstByDriverIdAndStatusInOrderByUpdatedAtDesc(
             UUID driverId, Collection<DeliveryStatus> statuses);
 

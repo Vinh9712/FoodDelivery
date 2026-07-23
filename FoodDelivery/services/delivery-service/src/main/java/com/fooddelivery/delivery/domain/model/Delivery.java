@@ -203,6 +203,24 @@ public class Delivery {
         this.updatedAt = Instant.now();
     }
 
+    /**
+     * Driver rejects assignment: clear driver and re-queue FINDING_DRIVER for reassignment.
+     *
+     * @return previous driver id (may be null)
+     */
+    public UUID rejectAssignment(Instant now) {
+        if (status != DeliveryStatus.DRIVER_ASSIGNED) {
+            throw new InvalidDeliveryStateException(status);
+        }
+        UUID previous = this.driverId;
+        this.driverId = null;
+        this.driverAssignedAt = null;
+        this.status = DeliveryStatus.FINDING_DRIVER;
+        this.nextAssignmentAt = now != null ? now : Instant.now();
+        this.updatedAt = this.nextAssignmentAt;
+        return previous;
+    }
+
     public void setCustomerIfMissing(UUID customerId) {
         if (this.customerId == null && customerId != null) {
             this.customerId = customerId;

@@ -64,17 +64,55 @@ public class FulfillmentEventListener {
 
         UUID orderId = textUuid(envelope.payload(), "orderId");
         UUID customerId = textUuid(envelope.payload(), "customerId");
-        if (orderId == null || customerId == null) {
-            log.warn("Event {} ({}) missing orderId/customerId; no job created", eventId, envelope.eventType());
+        if (orderId == null) {
+            log.warn("Event {} ({}) missing orderId; no job created", eventId, envelope.eventType());
             processedEventRepository.markProcessed(eventId, CONSUMER_NAME);
             return;
         }
 
-        notificationJobService.enqueue(new NotificationRequest(
-                orderId, customerId, "IN_APP", copy.subject(), copy.message()));
+        // Customer inbox (primary recipient)
+        if (customerId != null) {
+            notificationJobService.enqueue(new NotificationRequest(
+                    orderId, customerId, "IN_APP", copy.subject(), copy.message()));
+        }
+
+        // Driver inbox when assignment payload carries linked auth userId
+        UUID driverUserId = nestedUuid(envelope.payload(), "driver", "userId");
+        if (driverUserId != null && !driverUserId.equals(customerId)
+                && EventContracts.DRIVER_ASSIGNED.equals(envelope.eventType())) {
+            notificationJobService.enqueue(new NotificationRequest(
+                    orderId,
+                    driverUserId,
+                    "IN_APP",
+                    "New delivery job",
+                    "You have been assigned a delivery for order " + orderId));
+        }
+
+        // Restaurant owner when payload includes restaurantOwnerId (optional enrichment)
+        UUID ownerId = textUuid(envelope.payload(), "restaurantOwnerId");
+        if (ownerId != null && !ownerId.equals(customerId) && !ownerId.equals(driverUserId)) {
+            notificationJobService.enqueue(new NotificationRequest(
+                    orderId,
+                    ownerId,
+                    "IN_APP",
+                    "Restaurant order update",
+                    copy.message()));
+        }
+
+        if (customerId == null && driverUserId == null && ownerId == null) {
+            log.warn("Event {} ({}) had no notification recipients", eventId, envelope.eventType());
+        }
+
         processedEventRepository.markProcessed(eventId, CONSUMER_NAME);
-        log.info("Notification job queued: eventId={}, type={}, orderId={}, customerId={}",
-                eventId, envelope.eventType(), orderId, customerId);
+        log.info("Notification jobs queued: eventId={}, type={}, orderId={}, customerId={}, driverUserId={}, ownerId={}",
+                eventId, envelope.eventType(), orderId, customerId, driverUserId, ownerId);
+    }
+
+    private static UUID nestedUuid(JsonNode payload, String parent, String field) {
+        if (payload == null || !payload.has(parent) || !payload.get(parent).isObject()) {
+            return null;
+        }
+        return textUuid(payload.get(parent), field);
     }
 
     private NotificationCopy copyFor(String eventType, JsonNode payload) {

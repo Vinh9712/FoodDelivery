@@ -1,7 +1,10 @@
 package com.fooddelivery.payment.infrastructure.repository;
 
 import com.fooddelivery.payment.domain.model.Payment;
+import com.fooddelivery.payment.domain.model.valueobject.PaymentStatus;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -14,6 +17,8 @@ import java.util.UUID;
 @Repository
 public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     Optional<Payment> findByOrderId(UUID orderId);
+
+    Page<Payment> findByStatusOrderByCreatedAtDesc(PaymentStatus status, Pageable pageable);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select payment from Payment payment where payment.orderId = :orderId")

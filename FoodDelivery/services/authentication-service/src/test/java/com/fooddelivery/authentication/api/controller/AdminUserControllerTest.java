@@ -19,7 +19,11 @@ class AdminUserControllerTest {
     void listUsersBindsDefaultRequestParameters() throws Exception {
         AdminUserUseCase useCase = mock(AdminUserUseCase.class);
         when(useCase.listUsers(any())).thenReturn(List.of());
-        MockMvc mvc = MockMvcBuilders.standaloneSetup(new AdminUserController(useCase)).build();
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new AdminUserController(
+                useCase,
+                org.mockito.Mockito.mock(com.fooddelivery.authentication.application.usecase.PasswordUseCase.class),
+                org.mockito.Mockito.mock(com.fooddelivery.authentication.domain.repository.UserRepository.class)
+        )).build();
 
         mvc.perform(get("/api/v1/admin/users"))
                 .andExpect(status().isOk());

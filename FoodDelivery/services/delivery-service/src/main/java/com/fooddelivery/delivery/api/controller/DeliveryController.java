@@ -47,6 +47,15 @@ public class DeliveryController {
         return ResponseEntity.ok(DeliveryDetailResponse.from(delivery));
     }
 
+    @PostMapping("/{id}/reject")
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<DeliveryDetailResponse> reject(
+            @PathVariable("id") UUID id,
+            Authentication authentication) {
+        Delivery delivery = deliveryAssignmentService.rejectAssignmentByDriver(id, subject(authentication));
+        return ResponseEntity.ok(DeliveryDetailResponse.from(delivery));
+    }
+
     @PostMapping("/{id}/picked-up")
     @PreAuthorize("hasRole('DRIVER')")
     public ResponseEntity<DeliveryDetailResponse> pickedUp(
