@@ -4,7 +4,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 INSERT INTO users (id, email, phone, password_hash, role, is_active, email_verified, created_at, updated_at)
 VALUES 
 (
-    '019f7567-133e-7bfa-bd16-e788321cec22',
+    '10000000-0000-0000-0000-000000000002',
     'owner.demo@food.local',
     '0988111222',
     crypt('Demo@12345', gen_salt('bf', 10)),
