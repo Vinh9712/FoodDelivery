@@ -14,12 +14,12 @@ import java.util.UUID;
 @FeignClient(name = "restaurant-service")
 public interface RestaurantServiceClient {
 
-    @PostMapping("/internal/v1/restaurants/{restaurantId}/menu/quote")
+    @PostMapping(value = "/internal/v1/restaurants/{restaurantId}/menu/quote", headers = {"X-Internal-Service-Secret=${app.security.internal-service-secret:}"})
     MenuQuoteResponse quoteMenu(
             @PathVariable("restaurantId") UUID restaurantId,
             @RequestBody MenuQuoteRequest request);
 
-    @GetMapping("/internal/v1/restaurants/{restaurantId}/ownership/{userId}")
+    @GetMapping(value = "/internal/v1/restaurants/{restaurantId}/ownership/{userId}", headers = {"X-Internal-Service-Secret=${app.security.internal-service-secret:}"})
     RestaurantOwnershipResponse ownership(
             @PathVariable("restaurantId") UUID restaurantId,
             @PathVariable("userId") UUID userId);

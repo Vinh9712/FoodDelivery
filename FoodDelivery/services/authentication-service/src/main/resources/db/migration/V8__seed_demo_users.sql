@@ -1,4 +1,4 @@
--- V7: Seed demo users for RESTAURANT_OWNER, DRIVER, and CUSTOMER roles
+-- V8: Seed demo users for RESTAURANT_OWNER, DRIVER, and CUSTOMER roles
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 INSERT INTO users (id, email, phone, password_hash, role, is_active, email_verified, created_at, updated_at)
