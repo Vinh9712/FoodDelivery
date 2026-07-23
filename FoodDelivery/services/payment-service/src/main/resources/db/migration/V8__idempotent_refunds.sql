@@ -17,4 +17,11 @@ ALTER TABLE refunds DROP CONSTRAINT IF EXISTS uq_refunds_idempotency_key;
 ALTER TABLE refunds ADD CONSTRAINT uq_refunds_idempotency_key UNIQUE (idempotency_key);
 
 ALTER TABLE refunds DROP CONSTRAINT IF EXISTS uq_refunds_payment;
+
+-- Remove duplicate refunds per payment_id, keeping only the latest one
+DELETE FROM refunds r1
+USING refunds r2
+WHERE r1.payment_id = r2.payment_id
+  AND r1.created_at < r2.created_at;
+
 ALTER TABLE refunds ADD CONSTRAINT uq_refunds_payment UNIQUE (payment_id);

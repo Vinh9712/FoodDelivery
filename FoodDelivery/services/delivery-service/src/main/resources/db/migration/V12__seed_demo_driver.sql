@@ -1,4 +1,4 @@
--- V11: Seed the delivery profile used by driver.demo@food.local.
+-- V12: Seed the delivery profile used by driver.demo@food.local.
 INSERT INTO drivers (
     id,
     user_id,
