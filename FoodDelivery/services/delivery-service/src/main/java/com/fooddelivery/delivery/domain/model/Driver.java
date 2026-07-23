@@ -107,10 +107,38 @@ public class Driver {
         this.licensePlate = licensePlate.trim();
     }
 
+    /**
+     * Reserve driver for a job. Requires ACTIVE + online + available.
+     * Failure message names the actual blockers (status alone is often misleading).
+     */
     public void reserveForDelivery() {
-        if (!available || !isOnline || status != DriverStatus.ACTIVE) {
-            throw new DriverNotEligibleException(this.id, this.status);
+        if (status != DriverStatus.ACTIVE) {
+            throw new DriverNotEligibleException(this.id, "status: " + status + " — only ACTIVE can take jobs");
         }
+        if (!isOnline) {
+            throw new DriverNotEligibleException(this.id,
+                    "offline — driver must go online (or admin assign will force online)");
+        }
+        if (!available) {
+            throw new DriverNotEligibleException(this.id,
+                    "busy (available=false) — finish/release current delivery first");
+        }
+        this.available = false;
+    }
+
+    /**
+     * Admin/manual assign: ACTIVE only. Brings driver online and reserves capacity.
+     * Caller must ensure driver is free (or idle with no active deliveries).
+     */
+    public void reserveForAdminAssignment() {
+        if (status != DriverStatus.ACTIVE) {
+            throw new DriverNotEligibleException(this.id, "status: " + status + " — only ACTIVE can take jobs");
+        }
+        if (!available) {
+            throw new DriverNotEligibleException(this.id,
+                    "busy (available=false) — finish/release current delivery first");
+        }
+        this.isOnline = true;
         this.available = false;
     }
 

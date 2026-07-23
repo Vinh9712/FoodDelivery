@@ -7,4 +7,8 @@ public class DriverNotEligibleException extends RuntimeException {
     public DriverNotEligibleException(UUID driverId, DriverStatus status) {
         super("Driver " + driverId + " is not eligible (status: " + status + ")");
     }
+
+    public DriverNotEligibleException(UUID driverId, String reason) {
+        super("Driver " + driverId + " is not eligible (" + reason + ")");
+    }
 }

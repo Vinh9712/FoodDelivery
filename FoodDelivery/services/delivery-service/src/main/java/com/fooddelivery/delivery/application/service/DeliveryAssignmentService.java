@@ -93,6 +93,7 @@ public class DeliveryAssignmentService {
         }
         delivery.bindScheduleIdentityIfMissing(requestHash, idempotencyKey);
         delivery.setCustomerIfMissing(request.customerId());
+        delivery.setCustomerContactIfMissing(request.customerName(), request.customerPhone());
         delivery.setRestaurantIfMissing(request.restaurantId());
         if (delivery.getPickupAddress() == null && request.pickupAddressSnapshot() != null) {
             delivery.setPickupAddress(toPickupAddress(request.pickupAddressSnapshot()));
@@ -146,7 +147,24 @@ public class DeliveryAssignmentService {
 
         Driver driver = driverRepository.findByIdForUpdate(driverId)
                 .orElseThrow(() -> new DriverNotFoundException(driverId));
-        assignAndRecord(delivery, driver);
+
+        // Stuck flag after completed/failed jobs: free if no other active work.
+        if (!driver.isAvailable()) {
+            long active = deliveryRepository.countActiveByDriver(
+                    driverId, ACTIVE_STATUSES, delivery.getId());
+            if (active == 0) {
+                driver.markAvailable();
+                log.info("Freed stuck driver {} before admin assign (no active deliveries)", driverId);
+            }
+        }
+
+        // FAILED/CANCELLED need re-open before assignDriver state machine allows it.
+        if (delivery.getStatus() == DeliveryStatus.FAILED
+                || delivery.getStatus() == DeliveryStatus.CANCELLED) {
+            delivery.reopenForReassignment(clock.instant());
+        }
+
+        assignAndRecordAdmin(delivery, driver);
     }
 
     /**
@@ -237,12 +255,26 @@ public class DeliveryAssignmentService {
                 null,
                 requestHash,
                 idempotencyKey);
+        delivery.setCustomerContactIfMissing(request.customerName(), request.customerPhone());
         return deliveryRepository.save(delivery);
     }
 
     private void assignAndRecord(Delivery delivery, Driver driver) {
         Instant assignedAt = clock.instant();
         driver.reserveForDelivery();
+        delivery.assignDriver(driver.getId(), assignedAt);
+        deliveryRepository.save(delivery);
+        driverRepository.save(driver);
+        saveOutbox(delivery, EventContracts.DRIVER_ASSIGNED,
+                buildDriverAssignedPayload(delivery, driver, assignedAt), assignedAt);
+        log.info("Driver {} assigned to delivery {} for order {}",
+                driver.getId(), delivery.getId(), delivery.getOrderId());
+    }
+
+    /** Admin/manual assign: force online, free stuck available flag when idle. */
+    private void assignAndRecordAdmin(Delivery delivery, Driver driver) {
+        Instant assignedAt = clock.instant();
+        driver.reserveForAdminAssignment();
         delivery.assignDriver(driver.getId(), assignedAt);
         deliveryRepository.save(delivery);
         driverRepository.save(driver);

@@ -11,8 +11,20 @@ public record DeliveryRequest(
         UUID customerId,
         UUID restaurantId,
         PickupAddressSnapshot pickupAddressSnapshot,
-        DropoffAddressSnapshot dropoffAddressSnapshot
+        DropoffAddressSnapshot dropoffAddressSnapshot,
+        /** Optional snapshot for driver UI (ignored by schedule hash). */
+        String customerName,
+        String customerPhone
 ) {
+    /** Backward-compatible ctor without contact snapshot. */
+    public DeliveryRequest(
+            UUID orderId,
+            UUID customerId,
+            UUID restaurantId,
+            PickupAddressSnapshot pickupAddressSnapshot,
+            DropoffAddressSnapshot dropoffAddressSnapshot) {
+        this(orderId, customerId, restaurantId, pickupAddressSnapshot, dropoffAddressSnapshot, null, null);
+    }
     public record PickupAddressSnapshot(
             UUID restaurantId,
             String name,

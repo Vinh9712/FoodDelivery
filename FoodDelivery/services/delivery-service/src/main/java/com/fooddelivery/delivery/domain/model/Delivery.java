@@ -34,6 +34,13 @@ public class Delivery {
     @Column(name = "customer_id")
     private UUID customerId;
 
+    /** Contact snapshot for driver app (not a live customer profile join). */
+    @Column(name = "customer_name", length = 255)
+    private String customerName;
+
+    @Column(name = "customer_phone", length = 30)
+    private String customerPhone;
+
     @Column(name = "restaurant_id")
     private UUID restaurantId;
 
@@ -192,6 +199,24 @@ public class Delivery {
         this.updatedAt = at;
     }
 
+    /**
+     * Admin re-open after FAILED/CANCELLED (no driver) so a manual assign can run.
+     */
+    public void reopenForReassignment(Instant now) {
+        if (status != DeliveryStatus.FAILED && status != DeliveryStatus.CANCELLED) {
+            throw new InvalidDeliveryStateException(status);
+        }
+        if (this.driverId != null) {
+            throw new InvalidDeliveryStateException(status);
+        }
+        Instant at = now != null ? now : Instant.now();
+        this.status = DeliveryStatus.FINDING_DRIVER;
+        this.failureReason = null;
+        this.nextAssignmentAt = at;
+        this.lastAssignmentError = null;
+        this.updatedAt = at;
+    }
+
     public void startFindingDriver() {
         if (status != DeliveryStatus.PENDING && status != DeliveryStatus.FINDING_DRIVER) {
             throw new InvalidDeliveryStateException(status);
@@ -224,6 +249,23 @@ public class Delivery {
     public void setCustomerIfMissing(UUID customerId) {
         if (this.customerId == null && customerId != null) {
             this.customerId = customerId;
+            this.updatedAt = Instant.now();
+        }
+    }
+
+    public void setCustomerContactIfMissing(String customerName, String customerPhone) {
+        boolean changed = false;
+        if ((this.customerName == null || this.customerName.isBlank())
+                && customerName != null && !customerName.isBlank()) {
+            this.customerName = customerName.trim();
+            changed = true;
+        }
+        if ((this.customerPhone == null || this.customerPhone.isBlank())
+                && customerPhone != null && !customerPhone.isBlank()) {
+            this.customerPhone = customerPhone.trim();
+            changed = true;
+        }
+        if (changed) {
             this.updatedAt = Instant.now();
         }
     }
