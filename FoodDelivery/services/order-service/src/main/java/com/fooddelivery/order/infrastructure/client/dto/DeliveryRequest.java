@@ -12,14 +12,27 @@ public record DeliveryRequest(
         UUID customerId,
         UUID restaurantId,
         PickupAddressSnapshot pickupAddressSnapshot,
-        DeliveryAddressSnapshot dropoffAddressSnapshot
+        DeliveryAddressSnapshot dropoffAddressSnapshot,
+        String customerName,
+        String customerPhone
 ) {
+    public DeliveryRequest(
+            UUID orderId,
+            UUID customerId,
+            UUID restaurantId,
+            PickupAddressSnapshot pickupAddressSnapshot,
+            DeliveryAddressSnapshot dropoffAddressSnapshot) {
+        this(orderId, customerId, restaurantId, pickupAddressSnapshot, dropoffAddressSnapshot, null, null);
+    }
+
     public static DeliveryRequest from(RestaurantOrderService.OrderReadyForPickup event) {
         return new DeliveryRequest(
                 event.orderId(),
                 event.customerId(),
                 event.restaurantId(),
                 event.pickup(),
-                event.dropoff());
+                event.dropoff(),
+                event.customerName(),
+                event.customerPhone());
     }
 }

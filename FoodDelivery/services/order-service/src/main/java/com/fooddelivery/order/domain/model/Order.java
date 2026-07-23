@@ -143,10 +143,12 @@ public class Order {
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id")
+    @org.hibernate.annotations.BatchSize(size = 32)
     private List<OrderItem> items = new ArrayList<>();
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id")
+    @org.hibernate.annotations.BatchSize(size = 32)
     private List<OrderStatusHistory> statusHistory = new ArrayList<>();
 
     @Column(name = "created_at", nullable = false, updatable = false)

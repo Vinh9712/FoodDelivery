@@ -133,6 +133,8 @@ public class Restaurant {
         }
         boolean allowed = (next == RestaurantStatus.SUSPENDED && status != RestaurantStatus.SUSPENDED)
                 || (status == RestaurantStatus.SUSPENDED && next == RestaurantStatus.INACTIVE)
+                // Admin reinstate: suspended → active (hours still required below)
+                || (status == RestaurantStatus.SUSPENDED && next == RestaurantStatus.ACTIVE)
                 || (next == RestaurantStatus.ACTIVE
                 && (status == RestaurantStatus.PENDING || status == RestaurantStatus.INACTIVE))
                 || (status == RestaurantStatus.ACTIVE && next == RestaurantStatus.INACTIVE);

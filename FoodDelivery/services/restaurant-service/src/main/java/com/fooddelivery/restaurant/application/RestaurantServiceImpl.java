@@ -32,6 +32,10 @@ public class RestaurantServiceImpl implements RestaurantService {
     public RestaurantResponse createRestaurant(RestaurantRequest request) {
         log.info("Creating restaurant: {}", request.getName());
 
+        // Default 24h window so admin can activate without a second hours edit.
+        var open = request.getOpenTime() != null ? request.getOpenTime() : java.time.LocalTime.MIDNIGHT;
+        var close = request.getCloseTime() != null ? request.getCloseTime() : java.time.LocalTime.MIDNIGHT;
+
         Restaurant restaurant = Restaurant.builder()
                 .ownerId(request.getOwnerId())
                 .name(request.getName())
@@ -40,8 +44,8 @@ public class RestaurantServiceImpl implements RestaurantService {
                 .addressLine(request.getAddressLine())
                 .district(request.getDistrict())
                 .city(request.getCity())
-                .openTime(request.getOpenTime())
-                .closeTime(request.getCloseTime())
+                .openTime(open)
+                .closeTime(close)
                 .minOrderAmount(request.getMinOrderAmount())
                 .estimatedDeliveryTimeMin(request.getEstimatedDeliveryTimeMin())
                 .logoUrl(request.getLogoUrl())
@@ -49,7 +53,7 @@ public class RestaurantServiceImpl implements RestaurantService {
                 .build();
 
         Restaurant saved = restaurantRepository.save(restaurant);
-        log.info("Restaurant created with ID: {}", saved.getId());
+        log.info("Restaurant created with ID: {} (status={})", saved.getId(), saved.getStatus());
 
         return mapToResponse(saved);
     }

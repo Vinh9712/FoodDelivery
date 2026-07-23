@@ -21,8 +21,13 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     @EntityGraph(attributePaths = {"statusHistory"})
     Optional<Order> findWithHistoryById(UUID id);
 
-    @EntityGraph(attributePaths = {"statusHistory", "items"})
-    Optional<Order> findDetailedById(UUID id);
+    /**
+     * Detail load: fetch items in one query. Do <strong>not</strong> also entity-graph
+     * {@code statusHistory} — Hibernate cannot simultaneously fetch two bags
+     * ({@code MultipleBagFetchException}). History loads lazily (OSIV / batch).
+     */
+    @Query("select distinct o from Order o left join fetch o.items where o.id = :id")
+    Optional<Order> findDetailedById(@Param("id") UUID id);
 
     Optional<Order> findByCustomerIdAndClientRequestId(UUID customerId, String clientRequestId);
 
@@ -40,14 +45,16 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 
     /**
      * Admin/customer order list. Null filters are ignored.
+     * <p>Uses SpEL null checks so PostgreSQL does not need to infer types for
+     * {@code :param is null} bindings (Instant/UUID null → SQLState 42P18).
      */
     @Query("""
             select o from Order o
-            where (:customerId is null or o.customerId = :customerId)
-              and (:status is null or o.status = :status)
-              and (:restaurantId is null or o.restaurantId = :restaurantId)
-              and (:from is null or o.createdAt >= :from)
-              and (:to is null or o.createdAt <= :to)
+            where (:#{#customerId == null} = true or o.customerId = :customerId)
+              and (:#{#status == null} = true or o.status = :status)
+              and (:#{#restaurantId == null} = true or o.restaurantId = :restaurantId)
+              and (:#{#from == null} = true or o.createdAt >= :from)
+              and (:#{#to == null} = true or o.createdAt <= :to)
             """)
     Page<Order> findAllFiltered(
             @Param("customerId") UUID customerId,

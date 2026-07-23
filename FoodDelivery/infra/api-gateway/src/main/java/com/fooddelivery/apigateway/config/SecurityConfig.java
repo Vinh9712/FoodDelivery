@@ -92,7 +92,10 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.GET, "/api/v1/orders").hasAnyRole("CUSTOMER", "ADMIN")
                         .pathMatchers(HttpMethod.GET, "/api/v1/orders/history/**").hasAnyRole("CUSTOMER", "ADMIN")
                         .pathMatchers(HttpMethod.POST, "/api/v1/orders/preview").hasRole("CUSTOMER")
-                        .pathMatchers("/api/v1/notifications/me/**").authenticated()
+                        // Exact /me plus nested /me/{id}/read, /me/read-all
+                        .pathMatchers(
+                                "/api/v1/notifications/me",
+                                "/api/v1/notifications/me/**").authenticated()
                         .pathMatchers(HttpMethod.GET, "/api/v1/notifications").hasRole("ADMIN")
                         .pathMatchers(HttpMethod.POST, "/api/v1/deliveries/*/assign-driver/*").hasRole("ADMIN")
                         .pathMatchers("/api/v1/admin/drivers/**", "/api/v1/admin/deliveries/**",

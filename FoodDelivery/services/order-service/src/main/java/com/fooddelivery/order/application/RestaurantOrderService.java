@@ -33,7 +33,17 @@ public class RestaurantOrderService {
             UUID customerId,
             UUID restaurantId,
             PickupAddressSnapshot pickup,
-            DeliveryAddressSnapshot dropoff) {
+            DeliveryAddressSnapshot dropoff,
+            String customerName,
+            String customerPhone) {
+        public OrderReadyForPickup(
+                UUID orderId,
+                UUID customerId,
+                UUID restaurantId,
+                PickupAddressSnapshot pickup,
+                DeliveryAddressSnapshot dropoff) {
+            this(orderId, customerId, restaurantId, pickup, dropoff, null, null);
+        }
     }
 
     @Transactional
